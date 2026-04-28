@@ -1,6 +1,6 @@
 {
   "name": "@dynamic-core/form-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Dynamic form builder, field renderers, and display components. Publish from this folder after bumping version (npm publish; scope access in publishConfig).",
   "license": "ISC",
   "sideEffects": [
