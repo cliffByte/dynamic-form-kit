@@ -48,28 +48,48 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
 }
 ```
 
+Runtime components no longer fetch by id. Fetch the form (and submission when needed) from your API, then pass the payloads in. You can still use `client.getForm` / `client.getSubmission` from `createFormKitClient`, or your own fetch layer.
+
 ## Render a form (create)
 
 ```tsx
 import { FormRenderer } from '@dynamic-core/form-kit';
 
-export function NewSubmissionPage() {
+export async function NewSubmissionPage({ formId }: { formId: string }) {
+  const form = await fetchFormFromYourApi(formId);
+
   return (
     <FormRenderer
-      formId="FORM_ID"
+      form={form}
+      defaultValues={{ name: 'Hi' }}
+      onSubmit={async (values) => {
+        const res = await fetch('/api/submission', {
+          method: 'POST',
+          body: JSON.stringify({ formId, data: values }),
+        });
+        return res.json();
+      }}
       onSubmitSuccess={(result) => console.log('created', result)}
     />
   );
 }
 ```
 
+`form` accepts any shape understood by `extractSchemaFields` (e.g. `{ schema: { fields: [...] } }` or a bare field array).
+
 ## View a submission (read-only)
 
 ```tsx
 import { SubmissionViewer } from '@dynamic-core/form-kit';
 
-export function SubmissionViewPage() {
-  return <SubmissionViewer submissionId="SUBMISSION_ID" />;
+export function SubmissionViewPage({
+  form,
+  submission,
+}: {
+  form: unknown;
+  submission: unknown;
+}) {
+  return <SubmissionViewer form={form} submission={submission} />;
 }
 ```
 
@@ -78,10 +98,24 @@ export function SubmissionViewPage() {
 ```tsx
 import { SubmissionEditor } from '@dynamic-core/form-kit';
 
-export function SubmissionEditPage() {
+export function SubmissionEditPage({
+  form,
+  submission,
+}: {
+  form: unknown;
+  submission: unknown;
+}) {
   return (
     <SubmissionEditor
-      submissionId="SUBMISSION_ID"
+      form={form}
+      submission={submission}
+      onSubmit={async (values) => {
+        const res = await fetch('/api/submission/…', {
+          method: 'PATCH',
+          body: JSON.stringify({ data: values }),
+        });
+        return res.json();
+      }}
       onSubmitSuccess={(result) => console.log('updated', result)}
     />
   );
