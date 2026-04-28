@@ -217,14 +217,14 @@ export function SubmissionViewer({
   const renderField = useCallback(
     (field: FormField): React.ReactNode => {
       if (field.isHidden) return null;
-      if (!shouldShowField(field, valuesRef.current)) return null;
+      if (!shouldShowField(field, values)) return null;
 
       return (
         <DisplayFieldRenderer
           key={field.id}
           field={field}
-          value={valuesRef.current[field.id]}
-          formValues={valuesRef.current}
+          value={values[field.id]}
+          formValues={values}
           renderField={renderField}
           compact={compact}
           dynamicOptions={dynamicOptions[field.id] ?? []}
@@ -234,7 +234,7 @@ export function SubmissionViewer({
         />
       );
     },
-    [compact, dynamicOptions, loadingFields, errorFields, retryDynamicField],
+    [compact, dynamicOptions, loadingFields, errorFields, retryDynamicField, values],
   );
 
   if (loading) {

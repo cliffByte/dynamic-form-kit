@@ -290,11 +290,11 @@ export function FormRenderer({
   const renderField = useCallback(
     (field: FormField): React.ReactNode => {
       if (field.isHidden) return null;
-      if (!shouldShowField(field, valuesRef.current)) return null;
+      if (!shouldShowField(field, values)) return null;
 
       const ds = field.dataSource;
       const dependsOn = ds?.dependsOn;
-      const parentValue = dependsOn ? valuesRef.current[dependsOn] : undefined;
+      const parentValue = dependsOn ? values[dependsOn] : undefined;
       const isDependent = Boolean(dependsOn);
       const parentHasValue = isDependent
         ? parentValue !== '' && parentValue !== null && parentValue !== undefined
@@ -307,7 +307,7 @@ export function FormRenderer({
         <FormFieldRenderer
           key={field.id}
           field={field}
-          value={valuesRef.current[field.id]}
+          value={values[field.id]}
           onChange={(nextValue) => {
             setValues((prev) => ({ ...prev, [field.id]: nextValue }));
             setTouched((prev) => ({ ...prev, [field.id]: true }));
@@ -324,13 +324,14 @@ export function FormRenderer({
           parentHasValue={parentHasValue}
           parentFieldName={parentFieldName}
           renderField={renderField}
-          formValues={valuesRef.current}
+          formValues={values}
         />
       );
     },
     [
       disabled,
       saving,
+      values,
       touched,
       validationErrors,
       dynamicOptions,
