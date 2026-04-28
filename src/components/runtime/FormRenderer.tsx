@@ -100,14 +100,16 @@ async function fetchDynamicOptionsForField(
 }
 
 export interface FormRendererProps {
-  /** Fetch schema by id (preferred). */
-  formId?: string;
-  /** Escape hatch for direct schema rendering. */
-  fields?: FormField[];
-
+  /** Form config the consumer fetched (any shape accepted by extractSchemaFields). */
+  form: unknown;
+  /** When provided, defaults to edit behaviour and prefills via extractSubmissionValues. */
+  submission?: unknown;
+  /** Create mode only: merged on top of field-derived defaults. Ignored when submission is set. */
+  defaultValues?: Record<string, any>;
+  /**
+   * Explicit mode. If omitted: `'edit'` when submission is provided, otherwise `'create'`.
+   */
   mode?: 'create' | 'edit';
-  /** Required when mode="edit". */
-  submissionId?: string;
 
   className?: string;
   fieldsClassName?: string;
@@ -115,32 +117,46 @@ export interface FormRendererProps {
   submitLabel?: string;
   disabled?: boolean;
 
-  onSubmitSuccess?: (result: any) => void;
+  /** Consumer persists (POST/PATCH) or handles the payload. */
+  onSubmit: (cleanedValues: Record<string, any>) => Promise<unknown> | unknown;
+
+  onSubmitSuccess?: (result: unknown) => void;
   onSubmitError?: (error: Error) => void;
 }
 
 export function FormRenderer({
-  formId,
-  fields: fieldsProp,
-  mode = 'create',
-  submissionId,
+  form,
+  submission,
+  defaultValues,
+  mode: modeProp,
   className,
   fieldsClassName,
-  submitLabel = mode === 'edit' ? 'Save' : 'Submit',
+  submitLabel: submitLabelProp,
   disabled,
+  onSubmit,
   onSubmitSuccess,
   onSubmitError,
-}: FormRendererProps) {
-  const { locale, getForm, getSubmission, createSubmission, updateSubmission } =
-    useFormKit();
+}: FormRendererProps): React.ReactElement {
+  const { locale } = useFormKit();
 
-  const [loading, setLoading] = useState<boolean>(Boolean(formId) || Boolean(submissionId));
-  const [error, setError] = useState<string | null>(null);
+  const effectiveMode = modeProp ?? (submission != null ? 'edit' : 'create');
+  const submitLabel =
+    submitLabelProp ?? (effectiveMode === 'edit' ? 'Save' : 'Submit');
+
+  const fields = useMemo(() => extractSchemaFields(form), [form]);
+
+  const derivedInitialValues = useMemo((): Values => {
+    if (submission != null) {
+      return extractSubmissionValues(submission) as Values;
+    }
+    const base = createEnhancedSubmission(fields).submissionData as Values;
+    return { ...base, ...(defaultValues ?? {}) };
+  }, [submission, fields, defaultValues]);
+
+  const [values, setValues] = useState<Values>(derivedInitialValues);
+  const valuesRef = useRef<Values>(derivedInitialValues);
   const [saving, setSaving] = useState(false);
-
-  const [fields, setFields] = useState<FormField[]>(fieldsProp ?? []);
-  const [values, setValues] = useState<Values>({});
-  const valuesRef = useRef<Values>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -150,65 +166,18 @@ export function FormRenderer({
   const [loadingFields, setLoadingFields] = useState<Record<string, boolean>>({});
   const [errorFields, setErrorFields] = useState<Record<string, string>>({});
 
-  // Keep ref in sync with state to avoid stale closures in callbacks
+  // Reset form state when consumer-provided config / submission / defaults change
+  useEffect(() => {
+    setValues(derivedInitialValues);
+    valuesRef.current = derivedInitialValues;
+    setTouched({});
+    setValidationErrors({});
+    setSubmitError(null);
+  }, [derivedInitialValues]);
+
   useEffect(() => {
     valuesRef.current = values;
   }, [values]);
-
-  // Load schema + optionally submission values
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setLoading(Boolean(formId) || Boolean(submissionId));
-        setError(null);
-
-        let loadedFields: FormField[] = fieldsProp ?? [];
-        let nextValues: Values | null = null;
-
-        if (formId) {
-          const form = await getForm(formId);
-          loadedFields = extractSchemaFields(form?.schema ?? form);
-        }
-
-        if (mode === 'edit') {
-          if (!submissionId) {
-            throw new Error('FormRenderer: submissionId is required for edit mode');
-          }
-          const submission = await getSubmission(submissionId);
-          const submissionFields = extractSchemaFields(
-            submission?.form?.schema ?? submission?.form,
-          );
-          if (submissionFields.length > 0) {
-            loadedFields = submissionFields;
-          }
-          nextValues = extractSubmissionValues(submission) as Values;
-        }
-
-        if (!cancelled) {
-          setFields(loadedFields);
-          if (nextValues) {
-            setValues(nextValues);
-          } else {
-            setValues(createEnhancedSubmission(loadedFields).submissionData as Values);
-          }
-          setTouched({});
-          setValidationErrors({});
-        }
-      } catch (e) {
-        if (cancelled) return;
-        const msg = e instanceof Error ? e.message : 'Failed to load form';
-        setError(msg);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [formId, submissionId, mode, getForm, getSubmission, fieldsProp]);
 
   const visibleFields = useMemo(() => collectVisibleFields(fields, values), [fields, values]);
 
@@ -347,7 +316,7 @@ export function FormRenderer({
       e.preventDefault();
       if (saving) return;
       setSaving(true);
-      setError(null);
+      setSubmitError(null);
 
       try {
         const cleaned = cleanSubmissionData(valuesRef.current, fields);
@@ -364,51 +333,20 @@ export function FormRenderer({
           throw new Error('Validation failed');
         }
 
-        const result =
-          mode === 'edit'
-            ? await updateSubmission(String(submissionId), { data: cleaned })
-            : await createSubmission({ formId: String(formId), data: cleaned });
-
+        const result = await onSubmit(cleaned);
         onSubmitSuccess?.(result);
       } catch (e) {
         const err = e instanceof Error ? e : new Error('Submit failed');
         if (err.message !== 'Validation failed') {
-          setError(err.message);
+          setSubmitError(err.message);
         }
         onSubmitError?.(err);
       } finally {
         setSaving(false);
       }
     },
-    [
-      saving,
-      fields,
-      locale,
-      mode,
-      submissionId,
-      formId,
-      createSubmission,
-      updateSubmission,
-      onSubmitSuccess,
-      onSubmitError,
-    ],
+    [saving, fields, locale, onSubmit, onSubmitSuccess, onSubmitError],
   );
-
-  if (loading) {
-    return (
-      <div className={cn('p-6 text-sm text-muted-foreground', className)}>
-        Loading…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={cn('p-6 text-sm text-destructive', className)}>
-        {error}
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-6', className)}>
@@ -422,9 +360,8 @@ export function FormRenderer({
         <Button type='submit' disabled={disabled || saving}>
           {saving ? 'Saving…' : submitLabel}
         </Button>
-        {error && <span className='text-sm text-destructive'>{error}</span>}
+        {submitError && <span className='text-sm text-destructive'>{submitError}</span>}
       </div>
     </form>
   );
 }
-

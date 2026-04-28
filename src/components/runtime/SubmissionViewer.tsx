@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FormField } from '../../types/form';
 import { shouldShowField } from '../../lib/formUtils';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
-import { useFormKit } from '../../context/FormKitContext';
 import { cn } from '../../lib/utils';
 import { DisplayFieldRenderer } from '../display-fields/DisplayFieldRenderer';
 import {
@@ -81,65 +80,38 @@ async function fetchDynamicOptionsForField(
 }
 
 export interface SubmissionViewerProps {
-  submissionId: string;
+  form: unknown;
+  submission: unknown;
   className?: string;
   fieldsClassName?: string;
   compact?: boolean;
 }
 
 export function SubmissionViewer({
-  submissionId,
+  form,
+  submission,
   className,
   fieldsClassName,
   compact,
-}: SubmissionViewerProps) {
-  const { getSubmission } = useFormKit();
+}: SubmissionViewerProps): React.ReactElement {
+  const fields = useMemo(() => extractSchemaFields(form), [form]);
+  const values = useMemo(
+    () => extractSubmissionValues(submission) as Values,
+    [submission],
+  );
+  const valuesRef = useRef<Values>(values);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [fields, setFields] = useState<FormField[]>([]);
-  const [values, setValues] = useState<Values>({});
-  const valuesRef = useRef<Values>({});
-
-  const [dynamicOptions, setDynamicOptions] = useState<
+  const [dynamicOptions, setDynamicOptions] = React.useState<
     Record<string, Array<{ value: string; label: string }>>
   >({});
-  const [loadingFields, setLoadingFields] = useState<Record<string, boolean>>({});
-  const [errorFields, setErrorFields] = useState<Record<string, string>>({});
+  const [loadingFields, setLoadingFields] = React.useState<Record<string, boolean>>({});
+  const [errorFields, setErrorFields] = React.useState<Record<string, string>>({});
   const lastParentValuesRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     valuesRef.current = values;
+    lastParentValuesRef.current = {};
   }, [values]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const submission = await getSubmission(submissionId);
-        const loadedFields = extractSchemaFields(
-          submission?.form?.schema ?? submission?.form,
-        );
-        const nextValues = extractSubmissionValues(submission) as Values;
-
-        if (!cancelled) {
-          setFields(loadedFields);
-          setValues(nextValues);
-        }
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Failed to load submission');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [submissionId, getSubmission]);
 
   const visibleFields = useMemo(() => collectVisibleFields(fields, values), [fields, values]);
 
@@ -237,22 +209,6 @@ export function SubmissionViewer({
     [compact, dynamicOptions, loadingFields, errorFields, retryDynamicField, values],
   );
 
-  if (loading) {
-    return (
-      <div className={cn('p-6 text-sm text-muted-foreground', className)}>
-        Loading…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={cn('p-6 text-sm text-destructive', className)}>
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className={cn('space-y-4', className)}>
       <div className={cn('grid gap-4', fieldsClassName)}>
@@ -263,4 +219,3 @@ export function SubmissionViewer({
     </div>
   );
 }
-

@@ -14,7 +14,7 @@ export interface FormKitContextValue {
   t: (key: string) => string;
   /**
    * Optional API client created by `createFormKitClient()`.
-   * Runtime components (`FormRenderer`, `SubmissionViewer`, `SubmissionEditor`) depend on this.
+   * Consumers may use it to fetch `form` / `submission` data before passing props to runtime components.
    */
   client?: FormKitClient;
   listFormTemplates: () => Promise<FormTemplate[]>;
@@ -75,7 +75,10 @@ export interface FormKitProviderProps {
   value: Partial<FormKitContextValue>;
 }
 
-export function FormKitProvider({ children, value }: FormKitProviderProps) {
+export function FormKitProvider({
+  children,
+  value,
+}: FormKitProviderProps): React.ReactElement {
   const merged = { ...defaultContext, ...value } as FormKitContextValue;
 
   // If a client is provided and the caller didn't explicitly override a method,
