@@ -11,9 +11,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": {
+      "default": "./dist/styles.css"
+    }
   },
   "files": [
     "src",
@@ -35,10 +39,7 @@
   },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0",
-    "react-dom": "^18.2.0 || ^19.0.0",
-    "react-dnd": "^16.0.1",
-    "react-dnd-html5-backend": "^16.0.1",
-    "zustand": "^5.0.0"
+    "react-dom": "^18.2.0 || ^19.0.0"
   },
   "dependencies": {
     "@etpl/nepali-datepicker": "^1.0.8",
@@ -97,6 +98,8 @@
     "lowlight": "^3.3.0",
     "lucide-react": "^0.292.0",
     "react-day-picker": "^9.13.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
     "react-error-boundary": "^6.1.0",
     "react-hook-form": "^7.71.1",
     "react-leaflet": "^4.2.1",
@@ -105,15 +108,18 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.6.0",
     "uuid": "^9.0.1",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",
     "@types/lodash": "^4.17.23",
     "@types/node": "^20.8.0",
-    "@types/react": "18.2.0",
-    "@types/react-dom": "18.2.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "@types/uuid": "^9.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.2.2"
