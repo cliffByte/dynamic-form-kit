@@ -13,6 +13,7 @@ import { FormFieldRenderer } from '../form-fields/FormFieldRenderer';
 import {
   extractSchemaFields,
   extractSubmissionValues,
+  mapDefaultValuesToFieldIds,
 } from '../../lib/submissionUtils';
 
 type Values = Record<string, any>;
@@ -104,7 +105,10 @@ export interface FormRendererProps {
   form: unknown;
   /** When provided, defaults to edit behaviour and prefills via extractSubmissionValues. */
   submission?: unknown;
-  /** Create mode only: merged on top of field-derived defaults. Ignored when submission is set. */
+  /**
+   * Create mode only: merged on top of field-derived defaults. Ignored when submission is set.
+   * Keys may be field `id` or `uniqueIdentifier`.
+   */
   defaultValues?: Record<string, any>;
   /**
    * Explicit mode. If omitted: `'edit'` when submission is provided, otherwise `'create'`.
@@ -150,7 +154,8 @@ export function FormRenderer({
       return extractSubmissionValues(submission) as Values;
     }
     const base = createEnhancedSubmission(fields).submissionData as Values;
-    return { ...base, ...(defaultValues ?? {}) };
+    const mappedDefaults = mapDefaultValuesToFieldIds(fields, defaultValues);
+    return { ...base, ...mappedDefaults };
   }, [submission, fields, defaultValues]);
 
   const [values, setValues] = useState<Values>(derivedInitialValues);

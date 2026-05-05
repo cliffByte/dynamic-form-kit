@@ -47,6 +47,7 @@ export {
 export {
   extractSchemaFields,
   extractSubmissionValues,
+  mapDefaultValuesToFieldIds,
   type FormKitValues,
 } from './lib/submissionUtils';
 
