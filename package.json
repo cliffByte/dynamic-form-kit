@@ -27,7 +27,10 @@
     "build:css": "mkdir -p dist && tailwindcss -c tailwind.config.cjs -i ./src/styles/form-kit.css -o ./dist/styles.css --minify",
     "build": "npm run build:css && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "typecheck:linked": "node ../../frontend/scripts/link-form-kit-react.mjs && npm run typecheck"
+    "typecheck:linked": "node ../../frontend/scripts/link-form-kit-react.mjs && npm run typecheck",
+    "demo": "npm run build:css && npm --prefix demo run dev",
+    "demo:build": "npm run build:css && npm --prefix demo run build",
+    "demo:preview": "npm --prefix demo run preview"
   },
   "keywords": [
     "react",

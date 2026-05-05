@@ -140,6 +140,27 @@ module.exports = {
 - Package-only checks (optional):
   - `cd packages/form-kit && npm install && npm run build && npm run typecheck:linked`
 
+## Runtime local demo (hardcoded data)
+
+From `dynamic-form-kit`:
+
+```bash
+npm install
+npm --prefix demo install
+npm run demo
+```
+
+Then open [http://localhost:5174](http://localhost:5174).
+
+The demo renders all runtime components with local hardcoded payloads:
+- `FormRenderer` (create mode with `defaultValues` by `uniqueIdentifier`)
+- `SubmissionViewer` (read-only)
+- `SubmissionEditor` (edit mode)
+
+The demo is local-only:
+- Demo files live in `demo/` and are not published (`files` only includes `src` and `dist`).
+- Demo tooling dependencies are isolated in `demo/package.json`.
+
 ## Publish (when ready)
 
 From `packages/form-kit`:
