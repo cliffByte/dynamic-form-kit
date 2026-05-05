@@ -30,7 +30,8 @@
     "typecheck:linked": "node ../../frontend/scripts/link-form-kit-react.mjs && npm run typecheck",
     "demo": "npm run build:css && npm --prefix demo run dev",
     "demo:build": "npm run build:css && npm --prefix demo run build",
-    "demo:preview": "npm --prefix demo run preview"
+    "demo:preview": "npm --prefix demo run preview",
+    "test": "npm run build && tsx --test tests/submissionUtils.test.ts"
   },
   "keywords": [
     "react",
@@ -125,6 +126,7 @@
     "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.21.0",
     "typescript": "^5.2.2"
   }
 }
