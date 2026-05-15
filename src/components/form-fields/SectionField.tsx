@@ -35,7 +35,7 @@ export const SectionField = React.memo(function SectionField({
   return (
     <div
       className={cn(
-        'rounded-md border bg-card overflow-hidden  transition-all duration-200',
+        'rounded-md border bg-card overflow-visible transition-all duration-200',
         'hover:shadow-sm',
         className,
       )}>

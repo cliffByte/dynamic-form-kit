@@ -22,6 +22,9 @@ import { cn } from '../../lib/utils';
 import { isTodayConstraint, resolveDateConstraint } from '../../lib/dateConstraint';
 import { useFormKit } from '../../context/FormKitContext';
 
+/** Above section borders and other form overlays (popover uses this via zIndex prop). */
+const NEPALI_DATEPICKER_Z_INDEX = 10050;
+
 /**
  * Date picker field with single date and date range support
  */
@@ -125,10 +128,15 @@ export function DateField({
       errorMessage={errorMessage}
       className={className}>
       {useNepaliCalendar ? (
-        <div className={cn(showError && '[&_.ndc-input]:border-red-500')}>
+        <div
+          className={cn(
+            'relative z-[100]',
+            showError && '[&_.ndc-input]:border-red-500',
+          )}>
           <NepaliDatePicker
             id={field.id}
             variant='dropdown'
+            zIndex={NEPALI_DATEPICKER_Z_INDEX}
             calendarSystem='BS'
             language='ne'
             showCalendarSystemToggle={false}

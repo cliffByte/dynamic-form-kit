@@ -114,5 +114,36 @@
     transform: rotate(45deg);
     opacity: 0.6;
   }
+
+  /* Nepali date picker — keep calendar above section borders and stacked fields */
+  .ndc-dropdown-wrapper {
+    position: relative;
+    z-index: 100;
+    width: 100%;
+  }
+
+  .ndc-input-wrapper {
+    @apply relative w-full;
+  }
+
+  .ndc-input {
+    @apply w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none;
+  }
+
+  .ndc-input:focus {
+    @apply ring-2 ring-ring ring-offset-2;
+  }
+
+  .ndc-popover {
+    z-index: 10050 !important;
+    margin-top: 0.5rem;
+    border-radius: calc(var(--radius) - 2px);
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
 }
 
