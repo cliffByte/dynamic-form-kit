@@ -52,3 +52,15 @@ export {
 } from './lib/submissionUtils';
 
 export { useDynamicOptions, getNestedValue } from './hooks/useDynamicOptions';
+export { useLocalizedField, useLocalizedFields } from './hooks/useLocalizedField';
+export {
+  FORM_KIT_DEFAULT_LOCALE,
+  FORM_KIT_SUPPORTED_LOCALES,
+  resolveFormKitLocale,
+  type FormKitLocale,
+} from './lib/locales';
+export {
+  getLocalizedField,
+  getLocalizedFieldValue,
+  getLocalizedFields,
+} from './lib/fieldLocalization';

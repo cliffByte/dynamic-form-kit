@@ -3,6 +3,7 @@
 import React, { createContext, useContext, type ReactNode } from 'react';
 import type { FormField, FormTemplate } from '../types/form';
 import type { FormKitClient } from '../lib/client/createFormKitClient';
+import { resolveFormKitLocale } from '../lib/locales';
 
 export interface FormKitMediaUploadResult {
   url: string;
@@ -80,6 +81,7 @@ export function FormKitProvider({
   value,
 }: FormKitProviderProps): React.ReactElement {
   const merged = { ...defaultContext, ...value } as FormKitContextValue;
+  merged.locale = resolveFormKitLocale(merged.locale);
 
   // If a client is provided and the caller didn't explicitly override a method,
   // delegate runtime CRUD + upload to the client.

@@ -4,13 +4,14 @@ import React from 'react';
 import { DisplayFieldProps } from './types';
 import { DisplayFieldWrapper } from './DisplayFieldWrapper';
 import { getLocalizedValue } from '../../lib/utils';
+import { useFormKit } from '../../context/FormKitContext';
 
 export function DisplayTextField({
   field,
   value,
   className,
 }: DisplayFieldProps) {
-  const currentLocale = 'en';
+  const { locale: currentLocale } = useFormKit();
 
   // Handle objects (localized values)
   let displayVal = value;

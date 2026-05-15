@@ -28,6 +28,7 @@ import { MediaField } from './MediaField';
 import { MapFieldComponent } from './MapFieldComponent';
 import { CalculatedField } from './CalculatedField';
 import { NepaliUnicodeField } from './NepaliUnicodeField';
+import { useLocalizedField } from '../../hooks/useLocalizedField';
 
 export interface FormFieldRendererProps {
   /** The field configuration */
@@ -107,7 +108,7 @@ function FormFieldRendererInner({
   parentFieldName,
   renderField,
   formValues,
-}: FormFieldRendererProps): JSX.Element | null {
+}: FormFieldRendererProps): React.ReactElement | null {
   // Common props for all fields
   const baseProps: BaseFieldProps = {
     field,
@@ -259,18 +260,23 @@ function arePropsEqual(
   return true;
 }
 
-// Memoized component to prevent unnecessary re-renders
-export const FormFieldRenderer = React.memo(
-  FormFieldRendererInner,
-  arePropsEqual,
-);
+/**
+ * Localizes the field from FormKitProvider locale, then renders the memoized inner.
+ */
+export function FormFieldRenderer(props: FormFieldRendererProps) {
+  const localizedField = useLocalizedField(props.field);
+  if (!localizedField) return null;
+  return <FormFieldRendererMemo {...props} field={localizedField} />;
+}
+
+const FormFieldRendererMemo = React.memo(FormFieldRendererInner, arePropsEqual);
 
 /**
  * Hook-friendly wrapper for rendering fields
  */
 export function useFieldRenderer() {
   const renderField = React.useCallback(
-    (props: FormFieldRendererProps): JSX.Element => (
+    (props: FormFieldRendererProps): React.ReactElement => (
       <FormFieldRenderer {...props} />
     ),
     [],

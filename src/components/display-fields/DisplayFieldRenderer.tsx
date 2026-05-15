@@ -14,6 +14,7 @@ import { DisplayRangeField } from './DisplayRangeField';
 import { DisplayArrayField } from './DisplayArrayField';
 import { DisplayRichTextInputField } from './DisplayRichTextInputField';
 import { cn } from '../../lib/utils';
+import { useLocalizedField } from '../../hooks/useLocalizedField';
 
 export interface DisplayFieldRendererProps extends DisplayContainerProps {}
 
@@ -29,9 +30,11 @@ export function DisplayFieldRenderer({
   loadError,
   onRetry,
 }: DisplayFieldRendererProps) {
+  const localizedField = useLocalizedField(field) ?? field;
+
   // Common props
   const commonProps = {
-    field,
+    field: localizedField,
     value,
     className,
     dynamicOptions,
@@ -42,10 +45,10 @@ export function DisplayFieldRenderer({
   };
 
   // Handle hidden fields - usually they shouldn't be here but safety first
-  if (field.isHidden) return null;
+  if (localizedField.isHidden) return null;
 
   // Dispatch based on type
-  switch (field.type) {
+  switch (localizedField.type) {
     case 'text':
     case 'nepali_unicode':
     case 'email':
@@ -102,24 +105,26 @@ export function DisplayFieldRenderer({
       return (
         <div className={cn('space-y-4 py-4', className)}>
           <div className='border-b pb-2'>
-            <h3 className='text-lg font-bold tracking-tight'>{field.label}</h3>
-            {field.stepDescription && (
+            <h3 className='text-lg font-bold tracking-tight'>
+              {localizedField.label}
+            </h3>
+            {localizedField.stepDescription && (
               <p className='text-sm text-muted-foreground'>
-                {field.stepDescription}
+                {localizedField.stepDescription}
               </p>
             )}
           </div>
           <div
             className='grid gap-x-6 gap-y-2'
             style={
-              field.layoutType === 'grid'
+              localizedField.layoutType === 'grid'
                 ? {
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${field.gridColumns || 2}, minmax(0, 1fr))`,
+                    gridTemplateColumns: `repeat(${localizedField.gridColumns || 2}, minmax(0, 1fr))`,
                   }
                 : undefined
             }>
-            {field.fields?.map((nestedField) => (
+            {localizedField.fields?.map((nestedField) => (
               <div key={nestedField.id} className='w-full'>
                 {renderField ? renderField(nestedField) : null}
               </div>
@@ -135,7 +140,7 @@ export function DisplayFieldRenderer({
             'prose prose-sm max-w-none py-4 dark:prose-invert',
             className,
           )}
-          dangerouslySetInnerHTML={{ __html: field.content || '' }}
+          dangerouslySetInnerHTML={{ __html: localizedField.content || '' }}
         />
       );
 

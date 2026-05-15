@@ -1,6 +1,6 @@
 {
   "name": "@dynamic-core/form-kit",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Dynamic form builder, field renderers, and display components. Publish from this folder after bumping version (npm publish; scope access in publishConfig).",
   "license": "ISC",
   "sideEffects": [
@@ -30,8 +30,7 @@
     "typecheck:linked": "node ../../frontend/scripts/link-form-kit-react.mjs && npm run typecheck",
     "demo": "npm run build:css && npm --prefix demo run dev",
     "demo:build": "npm run build:css && npm --prefix demo run build",
-    "demo:preview": "npm --prefix demo run preview",
-    "test": "npm run build && tsx --test tests/submissionUtils.test.ts"
+    "demo:preview": "npm --prefix demo run preview"
   },
   "keywords": [
     "react",

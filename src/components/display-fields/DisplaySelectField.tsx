@@ -6,6 +6,7 @@ import { Badge } from '../ui/badge';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { getLocalizedValue } from '../../lib/utils';
+import { useFormKit } from '../../context/FormKitContext';
 
 export function DisplaySelectField({
   field,
@@ -17,7 +18,7 @@ export function DisplaySelectField({
   onRetry,
   renderField,
 }: DisplayFieldProps) {
-  const currentLocale = 'en';
+  const { locale: currentLocale } = useFormKit();
 
   const getLabel = (val: any) => {
     // Handle objects (localized values)

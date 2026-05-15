@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { FormField } from '../types/form';
 import { getLocalizedField } from '../lib/fieldLocalization';
+import { resolveFormKitLocale } from '../lib/locales';
 import { useFormKit } from '../context/FormKitContext';
 
 /**
@@ -9,7 +10,8 @@ import { useFormKit } from '../context/FormKitContext';
 export function useLocalizedField(
   field: FormField | undefined,
 ): FormField | undefined {
-  const { locale } = useFormKit();
+  const { locale: localeFromKit } = useFormKit();
+  const locale = resolveFormKitLocale(localeFromKit);
 
   return useMemo(() => {
     if (!field) return undefined;
@@ -21,7 +23,8 @@ export function useLocalizedField(
  * Hook to automatically localize an array of form fields
  */
 export function useLocalizedFields(fields: FormField[]): FormField[] {
-  const { locale } = useFormKit();
+  const { locale: localeFromKit } = useFormKit();
+  const locale = resolveFormKitLocale(localeFromKit);
 
   return useMemo(() => {
     return fields.map((field) => getLocalizedField(field, locale));
