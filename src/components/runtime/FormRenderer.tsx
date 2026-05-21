@@ -6,15 +6,29 @@ import { createEnhancedSubmission, shouldShowField } from '../../lib/formUtils';
 import { cleanSubmissionData } from '../../lib/formUtils';
 import { validateFormWithZod } from '../../lib/validationUtils';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
+import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { useFormKit } from '../../context/FormKitContext';
 import { Button } from '../ui/button';
-import { cn } from '../../lib/utils';
+import { cn, formatNumberByLocale } from '../../lib/utils';
 import { FormFieldRenderer } from '../form-fields/FormFieldRenderer';
 import {
   extractSchemaFields,
   extractSubmissionValues,
   mapDefaultValuesToFieldIds,
 } from '../../lib/submissionUtils';
+import {
+  groupStepSections,
+  isMultiStepWizard,
+  markFieldsTouched,
+  scrollToFirstFieldError,
+  findStepIndexForFieldId,
+  type StepGroup,
+} from '../../lib/formStepStructure';
+import {
+  MultiStepFormNav,
+  MultiStepProgress,
+  type MultiStepFormLabels,
+} from './MultiStepFormNav';
 
 type Values = Record<string, any>;
 
@@ -61,12 +75,14 @@ async function fetchDynamicOptionsForField(
   const ds = field.dataSource;
   if (!ds) return [];
 
-  // If depends on parent and no parent value, don't fetch
   if (ds.dependsOn && !parentValue) return [];
 
   let url = ds.url;
   if (ds.parentValuePath && parentValue) {
-    url = url.replace(ds.parentValuePath, encodeURIComponent(String(parentValue)));
+    const placeholder = ds.parentValuePath.startsWith('{')
+      ? ds.parentValuePath
+      : `{${ds.parentValuePath}}`;
+    url = url.replace(placeholder, encodeURIComponent(String(parentValue)));
   }
 
   const requestOptions: RequestInit = {
@@ -100,19 +116,12 @@ async function fetchDynamicOptionsForField(
   }));
 }
 
+export interface FormRendererStepLabels extends MultiStepFormLabels {}
+
 export interface FormRendererProps {
-  /** Form config the consumer fetched (any shape accepted by extractSchemaFields). */
   form: unknown;
-  /** When provided, defaults to edit behaviour and prefills via extractSubmissionValues. */
   submission?: unknown;
-  /**
-   * Create mode only: merged on top of field-derived defaults. Ignored when submission is set.
-   * Keys may be field `id` or `uniqueIdentifier`.
-   */
   defaultValues?: Record<string, any>;
-  /**
-   * Explicit mode. If omitted: `'edit'` when submission is provided, otherwise `'create'`.
-   */
   mode?: 'create' | 'edit';
 
   className?: string;
@@ -121,9 +130,23 @@ export interface FormRendererProps {
   submitLabel?: string;
   disabled?: boolean;
 
-  /** Consumer persists (POST/PATCH) or handles the payload. */
-  onSubmit: (cleanedValues: Record<string, any>) => Promise<unknown> | unknown;
+  /** When true (default), schemas with 2+ `step_section` fields use wizard navigation. */
+  enableMultiStep?: boolean;
+  stepLabels?: FormRendererStepLabels;
+  /** Show reset control. Defaults to true in create mode, false in edit mode. */
+  showReset?: boolean;
+  /** Label while `onSubmit` is in flight. Defaults to "Saving…". */
+  savingLabel?: string;
+  /**
+   * Optional hook to transform values after a field change (e.g. copy-rules between fields).
+   */
+  transformOnChange?: (
+    fieldId: string,
+    value: unknown,
+    values: Values,
+  ) => Values;
 
+  onSubmit: (cleanedValues: Record<string, any>) => Promise<unknown> | unknown;
   onSubmitSuccess?: (result: unknown) => void;
   onSubmitError?: (error: Error) => void;
 }
@@ -137,6 +160,11 @@ export function FormRenderer({
   fieldsClassName,
   submitLabel: submitLabelProp,
   disabled,
+  enableMultiStep = true,
+  stepLabels,
+  showReset: showResetProp,
+  savingLabel = 'Saving…',
+  transformOnChange,
   onSubmit,
   onSubmitSuccess,
   onSubmitError,
@@ -146,8 +174,10 @@ export function FormRenderer({
   const effectiveMode = modeProp ?? (submission != null ? 'edit' : 'create');
   const submitLabel =
     submitLabelProp ?? (effectiveMode === 'edit' ? 'Save' : 'Submit');
+  const showReset = showResetProp ?? effectiveMode === 'create';
 
-  const fields = useMemo(() => extractSchemaFields(form), [form]);
+  const rawFields = useMemo(() => extractSchemaFields(form), [form]);
+  const fields = useLocalizedFields(rawFields);
 
   const derivedInitialValues = useMemo((): Values => {
     if (submission != null) {
@@ -171,23 +201,47 @@ export function FormRenderer({
   const [loadingFields, setLoadingFields] = useState<Record<string, boolean>>({});
   const [errorFields, setErrorFields] = useState<Record<string, string>>({});
 
-  // Reset form state when consumer-provided config / submission / defaults change
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [activeStepGroup, setActiveStepGroup] = useState<StepGroup | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+
+  const formStructure = useMemo(() => groupStepSections(fields), [fields]);
+  const useWizard = enableMultiStep && isMultiStepWizard(formStructure, activeStepGroup);
+
+  const isLastStep = useMemo(() => {
+    if (!activeStepGroup) return true;
+    return currentStepIndex === activeStepGroup.steps.length - 1;
+  }, [activeStepGroup, currentStepIndex]);
+
   useEffect(() => {
     setValues(derivedInitialValues);
     valuesRef.current = derivedInitialValues;
     setTouched({});
     setValidationErrors({});
     setSubmitError(null);
+    setCurrentStepIndex(0);
+    setCompletedSteps(new Set());
   }, [derivedInitialValues]);
+
+  useEffect(() => {
+    if (formStructure.hasSteps && formStructure.stepGroups.length > 0) {
+      setActiveStepGroup(formStructure.stepGroups[0]);
+      setCurrentStepIndex(0);
+      setCompletedSteps(new Set());
+    } else {
+      setActiveStepGroup(null);
+    }
+  }, [formStructure]);
 
   useEffect(() => {
     valuesRef.current = values;
   }, [values]);
 
-  const visibleFields = useMemo(() => collectVisibleFields(fields, values), [fields, values]);
+  const visibleFields = useMemo(
+    () => collectVisibleFields(fields, values),
+    [fields, values],
+  );
 
-  // Dynamic options: fetch for visible dynamic fields.
-  // Dependency-aware: refetch when parent value changes.
   const lastParentValuesRef = useRef<Record<string, any>>({});
   useEffect(() => {
     const dynamicVisible = visibleFields.filter(isDynamicField);
@@ -202,15 +256,15 @@ export function FormRenderer({
 
           const parentId = ds.dependsOn;
           const parentValue = parentId ? valuesRef.current[parentId] : undefined;
-          const parentKey = parentId ? `${field.id}:${String(parentValue ?? '')}` : `${field.id}:__no_parent__`;
+          const parentKey = parentId
+            ? `${field.id}:${String(parentValue ?? '')}`
+            : `${field.id}:__no_parent__`;
 
-          // Skip if parent-dependent and parent is empty
           if (parentId && !parentValue) {
             setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
             return;
           }
 
-          // Avoid refetching for same parent value
           if (lastParentValuesRef.current[field.id] === parentKey) return;
           lastParentValuesRef.current[field.id] = parentKey;
 
@@ -261,8 +315,95 @@ export function FormRenderer({
     }
   }, []);
 
+  const validateCurrentStep = useCallback(
+    (stepField: FormField) => {
+      const stepFields = stepField.fields ?? [];
+      if (stepFields.length === 0) {
+        return { isValid: true, errors: {} as Record<string, string> };
+      }
+
+      const result = validateFormWithZod(
+        stepFields,
+        valuesRef.current,
+        locale,
+      );
+      setValidationErrors((prev) => ({ ...prev, ...result.errors }));
+      return result;
+    },
+    [locale],
+  );
+
+  const handleNextStep = useCallback(() => {
+    if (!activeStepGroup) return;
+    const currentStep = activeStepGroup.steps[currentStepIndex];
+    if (!currentStep) return;
+
+    const stepValidation = validateCurrentStep(currentStep);
+    if (!stepValidation.isValid) {
+      if (currentStep.fields?.length) {
+        setTouched((prev) => ({
+          ...prev,
+          ...markFieldsTouched(currentStep.fields!),
+        }));
+      }
+      scrollToFirstFieldError(stepValidation.errors);
+      return;
+    }
+
+    setCompletedSteps((prev) => {
+      const next = new Set(prev);
+      next.add(currentStepIndex);
+      return next;
+    });
+
+    if (currentStepIndex < activeStepGroup.steps.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [activeStepGroup, currentStepIndex, validateCurrentStep]);
+
+  const handlePreviousStep = useCallback(() => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex((prev) => prev - 1);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [currentStepIndex]);
+
+  const handleGoToStep = useCallback(
+    (stepIndex: number) => {
+      if (
+        stepIndex <= currentStepIndex ||
+        completedSteps.has(stepIndex - 1)
+      ) {
+        setCurrentStepIndex(stepIndex);
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+    },
+    [currentStepIndex, completedSteps],
+  );
+
+  const resetForm = useCallback(() => {
+    setValues(derivedInitialValues);
+    valuesRef.current = derivedInitialValues;
+    setTouched({});
+    setValidationErrors({});
+    setSubmitError(null);
+    setCurrentStepIndex(0);
+    setCompletedSteps(new Set());
+    lastParentValuesRef.current = {};
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [derivedInitialValues]);
+
   const renderField = useCallback(
-    (field: FormField): React.ReactNode => {
+    (field: FormField, parentDisabled = false): React.ReactNode => {
       if (field.isHidden) return null;
       if (!shouldShowField(field, values)) return null;
 
@@ -278,28 +419,41 @@ export function FormRenderer({
         : undefined;
 
       return (
-        <FormFieldRenderer
-          key={field.id}
-          field={field}
-          value={values[field.id]}
-          onChange={(nextValue) => {
-            setValues((prev) => ({ ...prev, [field.id]: nextValue }));
-            setTouched((prev) => ({ ...prev, [field.id]: true }));
-          }}
-          onBlur={() => setTouched((prev) => ({ ...prev, [field.id]: true }))}
-          showError={Boolean(touched[field.id]) && Boolean(validationErrors[field.id])}
-          errorMessage={validationErrors[field.id]}
-          disabled={disabled || saving}
-          dynamicOptions={dynamicOptions[field.id] ?? []}
-          isLoading={Boolean(loadingFields[field.id])}
-          loadError={errorFields[field.id] || undefined}
-          onRetry={() => retryDynamicField(field)}
-          isDependent={isDependent}
-          parentHasValue={parentHasValue}
-          parentFieldName={parentFieldName}
-          renderField={renderField}
-          formValues={values}
-        />
+        <div id={`field-${field.id}`}>
+          <FormFieldRenderer
+            key={field.id}
+            field={field}
+            value={values[field.id]}
+            onChange={(nextValue) => {
+              setValues((prev) => {
+                const base = { ...prev, [field.id]: nextValue };
+                return transformOnChange
+                  ? transformOnChange(field.id, nextValue, base)
+                  : base;
+              });
+              setTouched((prev) => ({ ...prev, [field.id]: true }));
+              setValidationErrors((prev) => {
+                if (!prev[field.id]) return prev;
+                const next = { ...prev };
+                delete next[field.id];
+                return next;
+              });
+            }}
+            onBlur={() => setTouched((prev) => ({ ...prev, [field.id]: true }))}
+            showError={Boolean(touched[field.id]) && Boolean(validationErrors[field.id])}
+            errorMessage={validationErrors[field.id]}
+            disabled={disabled || saving || parentDisabled}
+            dynamicOptions={dynamicOptions[field.id] ?? []}
+            isLoading={Boolean(loadingFields[field.id])}
+            loadError={errorFields[field.id] || undefined}
+            onRetry={() => retryDynamicField(field)}
+            isDependent={isDependent}
+            parentHasValue={parentHasValue}
+            parentFieldName={parentFieldName}
+            renderField={(f) => renderField(f, parentDisabled || field.isDisabled)}
+            formValues={values}
+          />
+        </div>
       );
     },
     [
@@ -313,8 +467,48 @@ export function FormRenderer({
       errorFields,
       retryDynamicField,
       fields,
+      transformOnChange,
     ],
   );
+
+  const persistSubmission = useCallback(async () => {
+    const cleaned = cleanSubmissionData(valuesRef.current, fields);
+    const validation = validateFormWithZod(fields, cleaned, locale);
+    setValidationErrors(validation.errors || {});
+
+    if (!validation.isValid) {
+      const nextTouched: Record<string, boolean> = {};
+      collectVisibleFields(fields, valuesRef.current).forEach((f) => {
+        nextTouched[f.id] = true;
+      });
+      setTouched(nextTouched);
+
+      if (useWizard && activeStepGroup) {
+        const firstErrorFieldId = Object.keys(validation.errors)[0];
+        if (firstErrorFieldId) {
+          const stepIndex = findStepIndexForFieldId(
+            activeStepGroup.steps,
+            firstErrorFieldId,
+          );
+          if (stepIndex !== -1 && stepIndex !== currentStepIndex) {
+            setCurrentStepIndex(stepIndex);
+          }
+        }
+      }
+
+      scrollToFirstFieldError(validation.errors);
+      throw new Error('Validation failed');
+    }
+
+    return onSubmit(cleaned);
+  }, [
+    fields,
+    locale,
+    onSubmit,
+    useWizard,
+    activeStepGroup,
+    currentStepIndex,
+  ]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -324,49 +518,159 @@ export function FormRenderer({
       setSubmitError(null);
 
       try {
-        const cleaned = cleanSubmissionData(valuesRef.current, fields);
-        const validation = validateFormWithZod(fields, cleaned, locale);
-        setValidationErrors(validation.errors || {});
+        if (useWizard && activeStepGroup) {
+          const currentStep = activeStepGroup.steps[currentStepIndex];
+          if (currentStep) {
+            const stepValidation = validateCurrentStep(currentStep);
+            if (!stepValidation.isValid) {
+              if (currentStep.fields?.length) {
+                setTouched((prev) => ({
+                  ...prev,
+                  ...markFieldsTouched(currentStep.fields!),
+                }));
+              }
+              scrollToFirstFieldError(stepValidation.errors);
+              throw new Error('Validation failed');
+            }
+          }
 
-        if (!validation.isValid) {
-          // mark everything as touched so errors show
-          const nextTouched: Record<string, boolean> = {};
-          collectVisibleFields(fields, valuesRef.current).forEach((f) => {
-            nextTouched[f.id] = true;
-          });
-          setTouched(nextTouched);
-          throw new Error('Validation failed');
+          if (!isLastStep) {
+            handleNextStep();
+            return;
+          }
         }
 
-        const result = await onSubmit(cleaned);
+        const result = await persistSubmission();
         onSubmitSuccess?.(result);
-      } catch (e) {
-        const err = e instanceof Error ? e : new Error('Submit failed');
-        if (err.message !== 'Validation failed') {
-          setSubmitError(err.message);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Submit failed');
+        if (error.message !== 'Validation failed') {
+          setSubmitError(error.message);
         }
-        onSubmitError?.(err);
+        onSubmitError?.(error);
       } finally {
         setSaving(false);
       }
     },
-    [saving, fields, locale, onSubmit, onSubmitSuccess, onSubmitError],
+    [
+      saving,
+      useWizard,
+      activeStepGroup,
+      currentStepIndex,
+      validateCurrentStep,
+      isLastStep,
+      handleNextStep,
+      persistSubmission,
+      onSubmitSuccess,
+      onSubmitError,
+    ],
   );
+
+  const renderSinglePageFields = () => (
+    <div className={cn('grid gap-4', fieldsClassName)}>
+      {fields.map((field) => (
+        <div key={field.id}>{renderField(field)}</div>
+      ))}
+    </div>
+  );
+
+  const renderWizardBody = () => {
+    if (!activeStepGroup) return null;
+    const currentStep = activeStepGroup.steps[currentStepIndex];
+
+    return (
+      <>
+        <MultiStepProgress
+          steps={activeStepGroup.steps}
+          currentStepIndex={currentStepIndex}
+          completedSteps={completedSteps}
+          locale={locale}
+          onGoToStep={handleGoToStep}
+        />
+
+        {currentStep && (
+          <div className='animate-in fade-in slide-in-from-right-4 duration-300'>
+            <div className='border-b pb-4 mb-4'>
+              <h3 className='font-semibold text-xl flex items-center gap-3'>
+                <span className='bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold'>
+                  {formatNumberByLocale(currentStepIndex + 1, locale)}
+                </span>
+                {currentStep.label}
+              </h3>
+              {currentStep.stepDescription && (
+                <p className='text-sm text-muted-foreground mt-2 ml-11'>
+                  {currentStep.stepDescription}
+                </p>
+              )}
+            </div>
+
+            {currentStep.fields && currentStep.fields.length > 0 && (
+              <div className={cn('space-y-4', fieldsClassName)}>
+                {currentStep.fields.map((nestedField) => (
+                  <div key={nestedField.id}>{renderField(nestedField)}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {formStructure.nonStepFields.length > 0 && isLastStep && (
+          <div className={cn('space-y-4 mt-4 pt-4 border-t', fieldsClassName)}>
+            {formStructure.nonStepFields.map(({ field }) => (
+              <div key={field.id}>{renderField(field)}</div>
+            ))}
+          </div>
+        )}
+
+        <MultiStepFormNav
+          activeStepGroup={activeStepGroup}
+          currentStepIndex={currentStepIndex}
+          isLastStep={isLastStep}
+          saving={saving}
+          disabled={disabled}
+          submitLabel={submitLabel}
+          savingLabel={savingLabel}
+          labels={stepLabels ?? {}}
+          showReset={showReset}
+          onPrevious={handlePreviousStep}
+          onNext={handleNextStep}
+          onReset={resetForm}
+        />
+      </>
+    );
+  };
 
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-6', className)}>
-      <div className={cn('grid gap-4', fieldsClassName)}>
-        {fields.map((field) => (
-          <div key={field.id}>{renderField(field)}</div>
-        ))}
-      </div>
-
-      <div className='flex items-center gap-3'>
-        <Button type='submit' disabled={disabled || saving}>
-          {saving ? 'Saving…' : submitLabel}
-        </Button>
-        {submitError && <span className='text-sm text-destructive'>{submitError}</span>}
-      </div>
+      {fields.length === 0 ? (
+        <p className='text-center py-8 text-muted-foreground'>No fields to display.</p>
+      ) : useWizard ? (
+        renderWizardBody()
+      ) : (
+        <>
+          {renderSinglePageFields()}
+          <div className='flex flex-col sm:flex-row items-center gap-3 pt-4 border-t'>
+            {showReset && (
+              <Button
+                type='button'
+                variant='outline'
+                onClick={resetForm}
+                disabled={disabled || saving}>
+                {stepLabels?.reset ?? 'Reset'}
+              </Button>
+            )}
+            <Button type='submit' disabled={disabled || saving} className='sm:ml-auto'>
+              {saving ? savingLabel : submitLabel}
+            </Button>
+            {submitError && (
+              <span className='text-sm text-destructive'>{submitError}</span>
+            )}
+          </div>
+        </>
+      )}
+      {useWizard && submitError && (
+        <p className='text-sm text-destructive'>{submitError}</p>
+      )}
     </form>
   );
 }
