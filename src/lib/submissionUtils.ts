@@ -48,10 +48,20 @@ export function extractSubmissionValues(submission: any): FormKitValues {
   const data = submission?.data ?? submission?.values ?? submission?.submissionData;
   if (!data) return {};
   if (Array.isArray(data)) {
-    return data.reduce((acc: FormKitValues, item: any) => {
-      if (item && item.id !== undefined) acc[String(item.id)] = item.value;
-      return acc;
-    }, {});
+    const merged: FormKitValues = {};
+    for (const item of data) {
+      if (!item) continue;
+      const v = item.value;
+      // Backend shape: [{ id: rowId, value: { fieldId: answer, ... } }]
+      if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+        Object.assign(merged, v);
+        continue;
+      }
+      if (item.id !== undefined) {
+        merged[String(item.id)] = v;
+      }
+    }
+    return merged;
   }
   if (typeof data === 'object') return data as FormKitValues;
   return {};
