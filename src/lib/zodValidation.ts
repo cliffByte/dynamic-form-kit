@@ -514,12 +514,30 @@ export function buildFieldSchema(
       }
       break;
 
-    case 'table':
-      // Table field - array of row objects with column data
-      if (field.tableColumns && field.tableColumns.length > 0) {
-        // Build row schema based on column definitions
+    case 'table': {
+      // Table field - array of row objects (or column instances when expand direction is columns)
+      const expandByColumns =
+        field.tableExpandDirection === 'columns' &&
+        ((field.tableRows?.length ?? 0) > 0 ||
+          (field.tableColumns?.length ?? 0) > 0);
+      const columnDefsForSchema = expandByColumns
+        ? field.tableRows!.map(
+            (rowDef, rowIndex) =>
+              field.tableColumns?.[rowIndex] ?? field.tableColumns?.[0],
+          ).filter(Boolean)
+        : field.tableColumns;
+
+      if (columnDefsForSchema && columnDefsForSchema.length > 0) {
         const rowSchemaShape: Record<string, z.ZodTypeAny> = {};
-        field.tableColumns.forEach((col) => {
+        const defsToIterate = expandByColumns
+          ? field.tableRows!.map((rowDef, rowIndex) => ({
+              key: rowDef.id,
+              col:
+                field.tableColumns?.[rowIndex] ?? field.tableColumns?.[0]!,
+            }))
+          : field.tableColumns!.map((col) => ({ key: col.id, col }));
+
+        defsToIterate.forEach(({ key, col }) => {
           const colLabel =
             locale && col.translations?.label?.[locale]
               ? col.translations.label[locale]
@@ -570,28 +588,29 @@ export function buildFieldSchema(
               colSchema = z.string().min(1, `${colLabel} is required`);
             }
           }
-          rowSchemaShape[col.id] = colSchema;
+          rowSchemaShape[key] = colSchema;
         });
         const rowSchema = z.object(rowSchemaShape);
         schema = z.array(rowSchema);
 
-        // Apply min/max items validation
+        const itemLabel = expandByColumns ? 'columns' : 'rows';
         if (field.minItems !== undefined && field.minItems > 0) {
           schema = (schema as z.ZodArray<any>).min(
             field.minItems,
-            `${getLabel()} requires at least ${field.minItems} rows`,
+            `${getLabel()} requires at least ${field.minItems} ${itemLabel}`,
           );
         }
         if (field.maxItems !== undefined) {
           schema = (schema as z.ZodArray<any>).max(
             field.maxItems,
-            `${getLabel()} allows maximum ${field.maxItems} rows`,
+            `${getLabel()} allows maximum ${field.maxItems} ${itemLabel}`,
           );
         }
       } else {
         schema = z.array(z.any());
       }
       break;
+    }
 
     case 'calculated':
       // Calculated fields are read-only, accept any value

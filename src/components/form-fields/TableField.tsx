@@ -10,6 +10,10 @@ import { ContainerFieldProps } from './types';
 import { cn } from '../../lib/utils';
 import { evaluateFormula } from '../../lib/formUtils';
 import { buildGroupedTableHeaders } from '../../lib/tableGrouping';
+import {
+  getEffectiveTableRowDefinitions,
+  isTableExpandByColumns,
+} from '../../lib/tableExpand';
 
 interface TableRow {
   [key: string]: any;
@@ -36,18 +40,30 @@ export function TableField({
   const columns = allColumns.filter(
     (col) => !('isHidden' in col && col.isHidden),
   );
-  const minRows = field.minItems || 0;
+  const minRows = field.minItems ?? 0;
   const maxRows = field.maxItems;
   const columnGroups = field.tableColumnGroups || [];
-  const rowDefinitions = field.tableRows || [];
+  const rowDefinitions = getEffectiveTableRowDefinitions(field);
   const rowHeaderLabel = field.tableRowHeaderLabel || 'Row';
   const tableCellDefaults = field.tableCellDefaults || [];
+  const expandByColumns = isTableExpandByColumns(field);
   const hasFixedRows =
-    minRows > 0 && maxRows !== undefined && Number(maxRows) === minRows;
+    !expandByColumns &&
+    (field.tableMode === 'matrix' ||
+      (minRows > 0 &&
+        maxRows !== undefined &&
+        Number(maxRows) === minRows));
   const fixedRowCount =
     hasFixedRows && rowDefinitions.length > 0 ? rowDefinitions.length : minRows;
-  const showRowLabelColumn = hasFixedRows && rowDefinitions.length > 0;
+  const showRowLabelColumn =
+    rowDefinitions.length > 0 && (hasFixedRows || expandByColumns);
   const groupedHeaders = buildGroupedTableHeaders(columns, columnGroups);
+  const showSerialColumn =
+    !expandByColumns && Boolean(field.tableShowSerialNumber);
+  const serialNumberLabel = field.tableSerialNumberLabel?.trim() || 'SN';
+  const headerRowSpan = groupedHeaders.hasGroups
+    ? groupedHeaders.maxDepth + 1
+    : 1;
 
   // Create column map for formula evaluation - use ALL columns including hidden
   const columnMap = React.useMemo(() => {
@@ -90,47 +106,74 @@ export function TableField({
     [rowDefinitions],
   );
 
+  const getColumnDefForRow = React.useCallback(
+    (rowIndex: number): TableColumn | FormField =>
+      allColumns[rowIndex] ?? allColumns[0],
+    [allColumns],
+  );
+
+  const applyDefaultToCell = React.useCallback(
+    (
+      target: TableRow,
+      key: string,
+      col: TableColumn | FormField,
+      rowIndex: number,
+      rowId?: string,
+    ) => {
+      const current = target[key];
+      if (current !== undefined && current !== null && current !== '') {
+        return;
+      }
+
+      const defaultCellValue = getCellDefault(rowIndex, col.id, rowId);
+      if (
+        defaultCellValue !== undefined &&
+        defaultCellValue !== null &&
+        defaultCellValue !== ''
+      ) {
+        target[key] = defaultCellValue;
+        return;
+      }
+
+      if (
+        'default_value' in col &&
+        col.default_value !== undefined &&
+        col.default_value !== null
+      ) {
+        target[key] = col.default_value;
+        return;
+      }
+
+      switch (col.type) {
+        case 'checkbox':
+        case 'multi_select':
+          target[key] = [];
+          break;
+        case 'number':
+          target[key] = null;
+          break;
+        default:
+          target[key] = '';
+      }
+    },
+    [getCellDefault],
+  );
+
   const createRow = React.useCallback(
     (rowIndex: number, baseRow?: TableRow): TableRow => {
       const row: TableRow = { ...(baseRow || {}) };
       const rowId = rowDefinitions[rowIndex]?.id;
 
+      if (expandByColumns) {
+        rowDefinitions.forEach((rowDef, defIndex) => {
+          const col = getColumnDefForRow(defIndex);
+          applyDefaultToCell(row, rowDef.id, col, defIndex, rowDef.id);
+        });
+        return row;
+      }
+
       allColumns.forEach((col) => {
-        const current = row[col.id];
-        if (current !== undefined && current !== null && current !== '') {
-          return;
-        }
-
-        const defaultCellValue = getCellDefault(rowIndex, col.id, rowId);
-        if (
-          defaultCellValue !== undefined &&
-          defaultCellValue !== null &&
-          defaultCellValue !== ''
-        ) {
-          row[col.id] = defaultCellValue;
-          return;
-        }
-
-        if (
-          'default_value' in col &&
-          col.default_value !== undefined &&
-          col.default_value !== null
-        ) {
-          row[col.id] = col.default_value;
-          return;
-        }
-
-        switch (col.type) {
-          case 'checkbox':
-          case 'multi_select':
-            row[col.id] = [];
-            break;
-          case 'number':
-            row[col.id] = null;
-            break;
-          default:
-            row[col.id] = '';
-        }
+        applyDefaultToCell(row, col.id, col, rowIndex, rowId);
       });
 
       allColumns.forEach((col) => {
@@ -142,7 +185,14 @@ export function TableField({
 
       return row;
     },
-    [allColumns, columnMap, getCellDefault, rowDefinitions],
+    [
+      allColumns,
+      columnMap,
+      rowDefinitions,
+      expandByColumns,
+      getColumnDefForRow,
+      applyDefaultToCell,
+    ],
   );
 
   const applyParentNumberSums = React.useCallback(
@@ -253,6 +303,7 @@ export function TableField({
   }, []);
 
   const addRow = () => {
+    if (expandByColumns) return;
     if (hasFixedRows) return;
     if (maxRows && rows.length >= maxRows) return;
 
@@ -261,31 +312,60 @@ export function TableField({
     onChange([...rows, newRow]);
   };
 
+  const addColumn = () => {
+    if (!expandByColumns) return;
+    if (maxRows && rows.length >= maxRows) return;
+
+    const newInstance = createRow(rows.length);
+    onChange([...rows, newInstance]);
+  };
+
   const removeRow = (index: number) => {
+    if (expandByColumns) return;
     if (hasFixedRows) return;
     if (rows.length <= minRows) return;
     const newRows = rows.filter((_, i) => i !== index);
     onChange(newRows);
   };
 
+  const removeColumn = (index: number) => {
+    if (!expandByColumns) return;
+    if (rows.length <= minRows) return;
+    onChange(rows.filter((_, i) => i !== index));
+  };
+
   const updateCell = (rowIndex: number, columnId: string, cellValue: any) => {
     const newRows = [...rows];
     let row = { ...newRows[rowIndex], [columnId]: cellValue };
 
-    // Trigger re-calculation for all calculated columns in this row - use ALL columns
-    allColumns.forEach((col) => {
-      if (col.type === 'calculated' && col.formula) {
-        const result = evaluateFormula(col.formula, row, columnMap);
-        row[col.id] = result !== null ? result : '';
-      }
-    });
+    if (!expandByColumns) {
+      allColumns.forEach((col) => {
+        if (col.type === 'calculated' && col.formula) {
+          const result = evaluateFormula(col.formula, row, columnMap);
+          row[col.id] = result !== null ? result : '';
+        }
+      });
+    }
 
     newRows[rowIndex] = row;
-    onChange(applyParentNumberSums(newRows));
+    onChange(expandByColumns ? newRows : applyParentNumberSums(newRows));
   };
 
-  const canAddMore = !hasFixedRows && (!maxRows || rows.length < maxRows);
-  const canRemove = !hasFixedRows && rows.length > minRows;
+  const updateCellByRow = (
+    instanceIndex: number,
+    rowDefIndex: number,
+    rowId: string,
+    cellValue: any,
+  ) => {
+    updateCell(instanceIndex, rowId, cellValue);
+  };
+
+  const canAddMore = expandByColumns
+    ? !maxRows || rows.length < maxRows
+    : !hasFixedRows && (!maxRows || rows.length < maxRows);
+  const canRemove = expandByColumns
+    ? rows.length > minRows
+    : !hasFixedRows && rows.length > minRows;
 
   const calculateTotal = (columnId: string) => {
     const rowsForTotal =
@@ -310,12 +390,40 @@ export function TableField({
       className={className}
       labelExtra={
         <span className='text-xs text-muted-foreground'>
-          ({rows.length} row{rows.length !== 1 ? 's' : ''})
-          {hasFixedRows ? ' / fixed' : maxRows ? ` / max ${maxRows}` : ''}
+          ({rows.length}{' '}
+          {expandByColumns
+            ? `column${rows.length !== 1 ? 's' : ''}`
+            : `row${rows.length !== 1 ? 's' : ''}`}
+          )
+          {hasFixedRows
+            ? ' / fixed rows'
+            : expandByColumns
+              ? ' / fixed row labels'
+              : maxRows
+                ? ` / max ${maxRows}`
+                : ''}
         </span>
       }>
       <div className='space-y-3'>
-        {/* Table */}
+        {expandByColumns ? (
+          <TransposedTable
+            field={field}
+            rows={rows}
+            rowDefinitions={rowDefinitions}
+            rowHeaderLabel={rowHeaderLabel}
+            disabled={disabled}
+            canAddMore={canAddMore}
+            canRemove={canRemove}
+            getColumnDefForRow={getColumnDefForRow}
+            isDefaultLockedCell={isDefaultLockedCell}
+            hasChildren={hasChildren}
+            showRowLabelColumn={showRowLabelColumn}
+            addColumn={addColumn}
+            removeColumn={removeColumn}
+            updateCellByRow={updateCellByRow}
+          />
+        ) : (
+        <>
         <div className='border rounded-lg overflow-hidden'>
           <div className='overflow-x-auto'>
             <table className='w-full'>
@@ -323,10 +431,17 @@ export function TableField({
                 {groupedHeaders.hasGroups &&
                   groupedHeaders.groupRows.map((row, rowIndex) => (
                     <tr key={`group-row-${rowIndex}`} className='bg-muted/30'>
+                      {showSerialColumn && rowIndex === 0 && (
+                        <th
+                          className='p-2 text-center text-sm font-medium text-muted-foreground border-r min-w-[52px]'
+                          rowSpan={headerRowSpan}>
+                          {serialNumberLabel}
+                        </th>
+                      )}
                       {showRowLabelColumn && rowIndex === 0 && (
                         <th
                           className='p-2 text-left text-sm font-medium text-muted-foreground border-r'
-                          rowSpan={groupedHeaders.maxDepth + 1}>
+                          rowSpan={headerRowSpan}>
                           {rowHeaderLabel}
                         </th>
                       )}
@@ -342,7 +457,7 @@ export function TableField({
                       {!hasFixedRows && rowIndex === 0 && (
                         <th
                           className='w-24 p-2 border-l text-center text-sm font-medium text-muted-foreground'
-                          rowSpan={groupedHeaders.maxDepth + 1}>
+                          rowSpan={headerRowSpan}>
                           Actions
                         </th>
                       )}
@@ -350,6 +465,11 @@ export function TableField({
                   ))}
 
                 <tr>
+                  {showSerialColumn && !groupedHeaders.hasGroups && (
+                    <th className='p-2 text-center text-sm font-medium text-muted-foreground border-r min-w-[52px]'>
+                      {serialNumberLabel}
+                    </th>
+                  )}
                   {showRowLabelColumn && !groupedHeaders.hasGroups && (
                     <th className='p-2 text-left text-sm font-medium text-muted-foreground border-r'>
                       {rowHeaderLabel}
@@ -393,6 +513,11 @@ export function TableField({
                       'border-t transition-colors',
                       'hover:bg-muted/20',
                     )}>
+                    {showSerialColumn && (
+                      <td className='p-2 border-r bg-muted/30 text-sm font-medium text-center text-muted-foreground tabular-nums'>
+                        {rowIndex + 1}
+                      </td>
+                    )}
                     {showRowLabelColumn && (
                       <td className='p-2 border-r bg-muted/20 text-sm font-medium'>
                         {rowDefinitions[rowIndex]?.name ||
@@ -445,7 +570,8 @@ export function TableField({
                       colSpan={
                         columns.length +
                         (hasFixedRows ? 0 : 1) +
-                        (showRowLabelColumn ? 1 : 0)
+                        (showRowLabelColumn ? 1 : 0) +
+                        (showSerialColumn ? 1 : 0)
                       }
                       className='p-8 text-center text-muted-foreground'>
                       <p className='text-sm'>No rows added yet</p>
@@ -463,6 +589,7 @@ export function TableField({
               {field.showTableFooter !== false && rows.length > 0 && (
                 <tfoot className='bg-muted/30 border-t'>
                   <tr>
+                    {showSerialColumn && <td className='p-2 border-r'></td>}
                     {showRowLabelColumn && <td className='p-2 border-r'></td>}
                     {columns.map((col) => {
                       // Show sum if explicitly set to true, or by default for number/calculated columns
@@ -507,8 +634,194 @@ export function TableField({
             Add Row
           </Button>
         )}
+        </>
+        )}
       </div>
     </FieldWrapper>
+  );
+}
+
+interface TransposedTableProps {
+  field: ContainerFieldProps['field'];
+  rows: TableRow[];
+  rowDefinitions: FormField['tableRows'];
+  rowHeaderLabel: string;
+  disabled?: boolean;
+  canAddMore: boolean;
+  canRemove: boolean;
+  showRowLabelColumn: boolean;
+  getColumnDefForRow: (rowIndex: number) => TableColumn | FormField;
+  isDefaultLockedCell: (rowIndex: number, columnId: string) => boolean;
+  hasChildren: (rowId: string) => boolean;
+  addColumn: () => void;
+  removeColumn: (index: number) => void;
+  updateCellByRow: (
+    instanceIndex: number,
+    rowDefIndex: number,
+    rowId: string,
+    cellValue: any,
+  ) => void;
+}
+
+function TransposedTable({
+  field,
+  rows,
+  rowDefinitions = [],
+  rowHeaderLabel,
+  disabled,
+  canAddMore,
+  canRemove,
+  showRowLabelColumn,
+  getColumnDefForRow,
+  isDefaultLockedCell,
+  hasChildren,
+  addColumn,
+  removeColumn,
+  updateCellByRow,
+}: TransposedTableProps) {
+  const defs = rowDefinitions ?? [];
+
+  const shouldShowSumForRow = (rowDefIndex: number) => {
+    const col = getColumnDefForRow(rowDefIndex);
+    const showSum = 'showSum' in col ? col.showSum : undefined;
+    return showSum !== undefined
+      ? showSum
+      : col.type === 'number' || col.type === 'calculated';
+  };
+
+  const calculateRowDefTotal = (rowDefIndex: number) => {
+    if (!shouldShowSumForRow(rowDefIndex)) return null;
+    const rowDef = defs[rowDefIndex];
+    return rows.reduce((sum, instance) => {
+      const val = parseFloat(String(instance[rowDef.id] || 0));
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+  };
+
+  return (
+    <>
+      <div className='border rounded-lg overflow-hidden'>
+        <div className='overflow-x-auto'>
+          <table className='w-full'>
+            <thead className='bg-muted/50'>
+              <tr>
+                {showRowLabelColumn && (
+                  <th className='p-2 text-left text-sm font-medium text-muted-foreground border-r min-w-[120px]'>
+                    {rowHeaderLabel}
+                  </th>
+                )}
+                {rows.map((_, instanceIndex) => (
+                  <th
+                    key={instanceIndex}
+                    className='border-l min-w-[140px] p-2'
+                    aria-label={`Entry ${instanceIndex + 1}`}
+                  />
+                ))}
+                <th className='w-28 p-2 border-l text-center text-sm font-medium text-muted-foreground'>
+                  {field.showTableFooter !== false ? 'Total' : 'Actions'}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={(showRowLabelColumn ? 1 : 0) + 1}
+                    className='p-8 text-center text-muted-foreground'>
+                    <p className='text-sm'>No columns added yet</p>
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  <tr className='border-t'>
+                    {showRowLabelColumn && <td className='border-r' />}
+                    {rows.map((_, instanceIndex) => (
+                      <td key={instanceIndex} className='bg-gray-50 border-l'>
+                        <div className='flex items-center justify-center'>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => removeColumn(instanceIndex)}
+                            disabled={disabled || !canRemove}
+                            className={cn(
+                              'h-7 w-7',
+                              canRemove &&
+                                'text-muted-foreground hover:text-red-600 hover:bg-red-50',
+                            )}>
+                            <Trash2 className='w-3 h-3' />
+                          </Button>
+                        </div>
+                      </td>
+                    ))}
+                    <td className='border-l' />
+                  </tr>
+                  {defs.map((rowDef, rowDefIndex) => (
+                    <tr key={rowDef.id} className='border-t hover:bg-muted/20'>
+                      {showRowLabelColumn && (
+                        <td className='p-2 border-r bg-muted/20 text-sm font-medium'>
+                          {rowDef.name || rowDef.label || rowDefIndex + 1}
+                        </td>
+                      )}
+                      {rows.map((instance, instanceIndex) => {
+                        const col = getColumnDefForRow(rowDefIndex);
+                        return (
+                          <td key={instanceIndex} className='border-l'>
+                            {renderCell(
+                              col,
+                              instance[rowDef.id],
+                              (val) =>
+                                updateCellByRow(
+                                  instanceIndex,
+                                  rowDefIndex,
+                                  rowDef.id,
+                                  val,
+                                ),
+                              disabled ||
+                                isDefaultLockedCell(rowDefIndex, col.id) ||
+                                (showRowLabelColumn &&
+                                  col.type === 'number' &&
+                                  hasChildren(rowDef.id)),
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className='border-l bg-muted/20 p-2 text-sm font-bold text-right align-middle'>
+                        {field.showTableFooter !== false &&
+                        rows.length > 0 ? (
+                          (() => {
+                            const total = calculateRowDefTotal(rowDefIndex);
+                            return total !== null
+                              ? total.toLocaleString()
+                              : '';
+                          })()
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className='flex gap-2'>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          onClick={addColumn}
+          disabled={disabled || !canAddMore}
+          className={cn(
+            'flex-1 border-dashed',
+            canAddMore && 'hover:border-primary hover:text-primary',
+          )}>
+          <Plus className='w-4 h-4 mr-2' />
+          Add Column
+        </Button>
+      </div>
+    </>
   );
 }
 

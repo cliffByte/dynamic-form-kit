@@ -32,6 +32,9 @@ interface TableColumnConfigDialogProps {
   tableRows?: TableRowConfig[];
   tableRowHeaderLabel?: string;
   cellDefaults?: TableCellDefault[];
+  tableExpandDirection?: 'rows' | 'columns';
+  tableShowSerialNumber?: boolean;
+  tableSerialNumberLabel?: string;
   onSave: (
     columns: TableColumn[],
     columnGroups: TableColumnGroup[],
@@ -39,6 +42,10 @@ interface TableColumnConfigDialogProps {
     tableRowHeaderLabel: string,
     cellDefaults?: TableCellDefault[],
     rowCount?: number,
+    tableOptions?: {
+      showSerialNumber?: boolean;
+      serialNumberLabel?: string;
+    },
   ) => void;
 }
 
@@ -50,6 +57,9 @@ export function TableColumnConfigDialog({
   tableRows: initialTableRows = [],
   tableRowHeaderLabel: initialTableRowHeaderLabel = 'Row',
   cellDefaults: initialCellDefaults = [],
+  tableExpandDirection = 'rows',
+  tableShowSerialNumber: initialShowSerialNumber = false,
+  tableSerialNumberLabel: initialSerialNumberLabel = 'SN',
   onSave,
 }: TableColumnConfigDialogProps) {
   const [columns, setColumns] = useState<TableColumn[]>([]);
@@ -57,6 +67,9 @@ export function TableColumnConfigDialog({
   const [tableRows, setTableRows] = useState<TableRowConfig[]>([]);
   const [cellDefaults, setCellDefaults] = useState<TableCellDefault[]>([]);
   const [tableRowHeaderLabel, setTableRowHeaderLabel] = useState<string>('Row');
+  const [showSerialNumber, setShowSerialNumber] = useState(false);
+  const [serialNumberLabel, setSerialNumberLabel] = useState('SN');
+  const expandByColumns = tableExpandDirection === 'columns';
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'columns' | 'groups' | 'defaults'>(
     'columns',
@@ -71,14 +84,12 @@ export function TableColumnConfigDialog({
               ...row,
               name: row.name || row.label,
             }))
-          : Array.from({ length: 3 }, (_, index) => ({
-              id: `row-${generateUUID().slice(0, 8)}`,
-              label: String(index + 1),
-              name: `Row ${index + 1}`,
-            }));
+          : [];
       setTableRows(normalizedRows);
       setCellDefaults([...initialCellDefaults]);
       setTableRowHeaderLabel(initialTableRowHeaderLabel || 'Row');
+      setShowSerialNumber(initialShowSerialNumber);
+      setSerialNumberLabel(initialSerialNumberLabel || 'SN');
       setSelectedColumnId(
         initialColumns.length > 0 ? initialColumns[0].id : null,
       );
@@ -90,6 +101,8 @@ export function TableColumnConfigDialog({
     initialCellDefaults,
     initialTableRows,
     initialTableRowHeaderLabel,
+    initialShowSerialNumber,
+    initialSerialNumberLabel,
   ]);
 
   const handleSave = () => {
@@ -101,6 +114,12 @@ export function TableColumnConfigDialog({
       tableRowHeaderLabel || 'Row',
       cellDefaults.length > 0 ? cellDefaults : undefined,
       rowCount,
+      !expandByColumns
+        ? {
+            showSerialNumber,
+            serialNumberLabel: serialNumberLabel.trim() || 'SN',
+          }
+        : undefined,
     );
     onClose();
   };
@@ -1165,10 +1184,28 @@ export function TableColumnConfigDialog({
                         </Button>
                       </div>
                       <p className='text-xs text-gray-500 mb-3'>
-                        Add child rows (e.g., 1.1, 1.2) under a parent row.
-                        Parent rows in number columns are auto-calculated as the
-                        sum of child rows.
+                        Rows are optional for dynamic tables. Add rows only for
+                        matrix mode (default cell values) or columns expand mode.
+                        Use child rows (e.g., 1.1, 1.2) under a parent; parent
+                        number cells sum children automatically.
                       </p>
+                      {tableRows.length === 0 ? (
+                        <div className='text-center py-6 rounded-lg border-2 border-dashed border-gray-200 bg-white'>
+                          <p className='text-sm text-gray-500'>No rows defined</p>
+                          <p className='text-xs text-gray-400 mt-1 mb-3'>
+                            Click Add Root Row when you need matrix or fixed row
+                            labels
+                          </p>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            onClick={addRootRow}
+                            className='gap-1'>
+                            <Plus className='w-3 h-3' /> Add Root Row
+                          </Button>
+                        </div>
+                      ) : (
                       <div className='space-y-2'>
                         {tableRows.map((row) => {
                           const depth = row.label.split('.').length - 1;
@@ -1205,8 +1242,7 @@ export function TableColumnConfigDialog({
                                   size='sm'
                                   variant='ghost'
                                   className='h-7 px-2 text-xs text-red-600 hover:text-red-700'
-                                  onClick={() => deleteRow(row.id)}
-                                  disabled={tableRows.length <= 1}>
+                                  onClick={() => deleteRow(row.id)}>
                                   Delete
                                 </Button>
                               </div>
@@ -1214,7 +1250,9 @@ export function TableColumnConfigDialog({
                           );
                         })}
                       </div>
+                      )}
                     </div>
+                    {tableRows.length > 0 && (
                     <Card>
                       <CardHeader className='py-3 bg-gray-50'>
                         <CardTitle className='text-sm'>
@@ -1347,6 +1385,7 @@ export function TableColumnConfigDialog({
                         </div>
                       </CardContent>
                     </Card>
+                    )}
                   </div>
                 )}
               </div>
@@ -1389,6 +1428,13 @@ export function TableColumnConfigDialog({
                     ))}
 
                   <tr>
+                    {showSerialNumber &&
+                      !expandByColumns &&
+                      !groupedHeaders.hasGroups && (
+                        <th className='px-3 py-2 text-center font-medium border bg-gray-100'>
+                          {serialNumberLabel || 'SN'}
+                        </th>
+                      )}
                     {(cellDefaults.length > 0 || tableRows.length > 0) &&
                       !groupedHeaders.hasGroups && (
                         <th className='px-3 py-2 text-left font-medium border bg-gray-100'>
@@ -1436,6 +1482,11 @@ export function TableColumnConfigDialog({
                   ) : (
                     // Dynamic mode: show single placeholder row
                     <tr>
+                      {showSerialNumber && !expandByColumns && (
+                        <td className='px-3 py-2 border text-center text-gray-500 text-xs bg-gray-50'>
+                          1
+                        </td>
+                      )}
                       {columns.map((col) => (
                         <td
                           key={col.id}
@@ -1447,6 +1498,40 @@ export function TableColumnConfigDialog({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {!expandByColumns && (
+          <div className='border-t px-6 py-4 bg-gray-50/80'>
+            <p className='text-xs font-medium text-gray-600 mb-3'>
+              Row table options
+            </p>
+            <div className='flex flex-wrap items-center gap-4'>
+              <label className='flex items-center gap-2 cursor-pointer'>
+                <input
+                  type='checkbox'
+                  checked={showSerialNumber}
+                  onChange={(e) => setShowSerialNumber(e.target.checked)}
+                  className='w-4 h-4 rounded border-gray-300'
+                />
+                <span className='text-sm text-gray-700'>
+                  Show serial number (SN) column
+                </span>
+              </label>
+              {showSerialNumber && (
+                <div className='flex items-center gap-2'>
+                  <Label className='text-xs text-gray-600 whitespace-nowrap'>
+                    SN header
+                  </Label>
+                  <Input
+                    value={serialNumberLabel}
+                    onChange={(e) => setSerialNumberLabel(e.target.value)}
+                    placeholder='SN'
+                    className='h-8 text-sm w-28'
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

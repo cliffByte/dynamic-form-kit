@@ -213,12 +213,16 @@ export interface FormField {
   // fields?: FormField[]; // Template fields for array items (reusing fields property from section)
 
   // Table specific properties (for table type)
+  tableMode?: 'dynamic' | 'matrix'; // dynamic = unlimited rows until min/max set; matrix = fixed rows from tableRows
+  tableExpandDirection?: 'rows' | 'columns'; // 'rows' = add rows (default); 'columns' = fixed rows, add columns to the right
   tableColumns?: TableColumn[]; // Column definitions for the table
   tableColumnGroups?: TableColumnGroup[]; // Column groupings (e.g., "Dimension" for length/breadth/height)
   tableRows?: TableRowConfig[]; // Hierarchical row definitions for matrix-style tables
   tableRowHeaderLabel?: string; // Header label for row-name column (default: "Row")
   tableCellDefaults?: TableCellDefault[]; // Default values for table cells (matrix mode) - uses rowIndex
   showTableFooter?: boolean; // Whether to show footer with column totals for number/calculated columns
+  tableShowSerialNumber?: boolean; // Row-expand mode: show serial number column as first column
+  tableSerialNumberLabel?: string; // Header label for SN column (default: "SN")
 
   // Calculated field specific properties (only for calculated type)
   formula?: string; // Mathematical formula expression with field IDs in curly braces (e.g., "{field1}*{field2}+{field3}")

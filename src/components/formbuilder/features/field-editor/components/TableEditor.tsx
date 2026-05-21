@@ -6,6 +6,7 @@ import { Label } from '../../../../ui/label';
 import { Input } from '../../../../ui/input';
 import { Button } from '../../../../ui/button';
 import { TableColumnConfigDialog } from '../../../../TableColumnConfigDialog';
+import { tableRowsFromColumns } from '../../../../../lib/tableExpand';
 
 interface TableEditorProps {
   field: FormField;
@@ -20,6 +21,9 @@ export const TableEditor: React.FC<TableEditorProps> = ({
 
   if (field.type !== 'table') return null;
 
+  const expandByColumns = field.tableExpandDirection === 'columns';
+  const isMatrixMode = field.tableMode === 'matrix';
+
   return (
     <div className='space-y-4 border-t pt-4'>
       <div className='flex items-center justify-between'>
@@ -33,21 +37,27 @@ export const TableEditor: React.FC<TableEditorProps> = ({
 
       <div className='grid grid-cols-2 gap-4'>
         <div className='space-y-1'>
-          <Label className='text-xs'>Min Rows</Label>
+          <Label className='text-xs'>
+            {expandByColumns ? 'Min Columns' : 'Min Rows'}
+          </Label>
           <Input
             type='number'
             min='0'
-            value={field.minItems ?? ''}
-            onChange={(e) =>
+            value={field.minItems ?? 0}
+            onChange={(e) => {
+              const parsed = parseInt(e.target.value, 10);
               updateField(field.id, {
-                minItems: e.target.value ? parseInt(e.target.value) : undefined,
-              })
-            }
+                minItems: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+              });
+            }}
             placeholder='0'
+            disabled={isMatrixMode && !expandByColumns}
           />
         </div>
         <div className='space-y-1'>
-          <Label className='text-xs'>Max Rows</Label>
+          <Label className='text-xs'>
+            {expandByColumns ? 'Max Columns' : 'Max Rows'}
+          </Label>
           <Input
             type='number'
             min='1'
@@ -57,24 +67,76 @@ export const TableEditor: React.FC<TableEditorProps> = ({
                 maxItems: e.target.value ? parseInt(e.target.value) : undefined,
               })
             }
-            placeholder='No limit'
+            placeholder={isMatrixMode && !expandByColumns ? 'Set in Configure Table' : 'Unlimited (empty)'}
+            disabled={isMatrixMode && !expandByColumns}
           />
         </div>
       </div>
 
-      <div className='flex items-center gap-2'>
-        <input
-          type='checkbox'
-          id='show-table-footer'
-          checked={field.showTableFooter ?? true}
-          onChange={(e) =>
-            updateField(field.id, { showTableFooter: e.target.checked })
-          }
-          className='w-4 h-4 rounded border-gray-300'
-        />
-        <Label htmlFor='show-table-footer' className='text-xs cursor-pointer'>
-          Show Footer (totals for number/calculated columns)
-        </Label>
+      <div className='space-y-1'>
+        <Label className='text-xs'>Expand Direction</Label>
+        <select
+          className='w-full h-9 text-sm border rounded-md px-2 bg-background'
+          value={field.tableExpandDirection ?? 'rows'}
+          onChange={(e) => {
+            const direction = e.target.value as 'rows' | 'columns';
+            const updates: Partial<FormField> = {
+              tableExpandDirection: direction,
+            };
+            if (
+              direction === 'columns' &&
+              (field.tableRows?.length ?? 0) === 0 &&
+              (field.tableColumns?.length ?? 0) > 0
+            ) {
+              updates.tableRows = tableRowsFromColumns(field.tableColumns!);
+            }
+            updateField(field.id, updates);
+          }}>
+          <option value='rows'>Rows (add rows at bottom, fixed columns)</option>
+          <option value='columns'>
+            Columns (add columns to the right, fixed rows)
+          </option>
+        </select>
+        <p className='text-xs text-muted-foreground'>
+          Columns mode adds entries to the right (uses row definitions from
+          Configure Table, or column labels if rows are empty). Min rows defaults
+          to 0; set max for a limit.
+        </p>
+      </div>
+
+      <div className='flex flex-col gap-2'>
+        {!expandByColumns && (
+          <div className='flex items-center gap-2'>
+            <input
+              type='checkbox'
+              id='show-table-sn'
+              checked={field.tableShowSerialNumber ?? false}
+              onChange={(e) =>
+                updateField(field.id, {
+                  tableShowSerialNumber: e.target.checked,
+                })
+              }
+              className='w-4 h-4 rounded border-gray-300'
+            />
+            <Label htmlFor='show-table-sn' className='text-xs cursor-pointer'>
+              Show SN column (first column)
+            </Label>
+          </div>
+        )}
+        <div className='flex items-center gap-2'>
+          <input
+            type='checkbox'
+            id='show-table-footer'
+            checked={field.showTableFooter ?? true}
+            onChange={(e) =>
+              updateField(field.id, { showTableFooter: e.target.checked })
+            }
+            className='w-4 h-4 rounded border-gray-300'
+          />
+          <Label htmlFor='show-table-footer' className='text-xs cursor-pointer'>
+            Show Footer (totals for number/calculated columns)
+          </Label>
+        </div>
       </div>
 
       <TableColumnConfigDialog
@@ -85,6 +147,9 @@ export const TableEditor: React.FC<TableEditorProps> = ({
         tableRows={field.tableRows || []}
         tableRowHeaderLabel={field.tableRowHeaderLabel || 'Row'}
         cellDefaults={field.tableCellDefaults || []}
+        tableExpandDirection={field.tableExpandDirection ?? 'rows'}
+        tableShowSerialNumber={field.tableShowSerialNumber}
+        tableSerialNumberLabel={field.tableSerialNumberLabel ?? 'SN'}
         onSave={(
           columns,
           columnGroups,
@@ -92,27 +157,52 @@ export const TableEditor: React.FC<TableEditorProps> = ({
           tableRowHeaderLabel,
           cellDefaults,
           rowCount,
+          tableOptions,
         ) => {
-          const hasExistingFixedRows =
-            field.minItems !== undefined &&
-            field.maxItems !== undefined &&
-            field.minItems === field.maxItems &&
-            field.minItems > 0;
-          const isMatrixMode =
-            (cellDefaults && cellDefaults.length > 0) ||
-            (tableRows && tableRows.length > 0) ||
-            hasExistingFixedRows;
+          const isMatrixMode = (cellDefaults?.length ?? 0) > 0;
+          const wasMatrixMode = field.tableMode === 'matrix';
+          const expandByColumns = field.tableExpandDirection === 'columns';
 
-          updateField(field.id, {
+          const updates: Partial<FormField> = {
             tableColumns: columns,
             tableColumnGroups: columnGroups,
-            tableRows,
             tableRowHeaderLabel,
             tableCellDefaults: cellDefaults,
-            ...(isMatrixMode && rowCount
-              ? { minItems: rowCount, maxItems: rowCount }
-              : {}),
-          });
+            tableMode: isMatrixMode ? 'matrix' : 'dynamic',
+            ...(tableOptions
+              ? {
+                  tableShowSerialNumber: tableOptions.showSerialNumber,
+                  tableSerialNumberLabel: tableOptions.serialNumberLabel,
+                }
+              : { tableShowSerialNumber: false }),
+            tableRows:
+              isMatrixMode || expandByColumns
+                ? tableRows.length > 0
+                  ? tableRows
+                  : expandByColumns
+                    ? tableRowsFromColumns(columns)
+                    : []
+                : [],
+          };
+
+          if (isMatrixMode && rowCount && !expandByColumns) {
+            updates.minItems = rowCount;
+            updates.maxItems = rowCount;
+          } else if (wasMatrixMode && !isMatrixMode) {
+            updates.minItems = undefined;
+            updates.maxItems = undefined;
+          } else if (
+            !isMatrixMode &&
+            !expandByColumns &&
+            field.minItems === field.maxItems &&
+            field.minItems === (field.tableRows?.length ?? 0) &&
+            (field.tableCellDefaults?.length ?? 0) === 0
+          ) {
+            updates.minItems = undefined;
+            updates.maxItems = undefined;
+          }
+
+          updateField(field.id, updates);
         }}
       />
     </div>

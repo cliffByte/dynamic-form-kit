@@ -148,6 +148,7 @@ function getTypeSpecificProperties(
         ],
         tableColumnGroups: [],
         showTableFooter: true,
+        tableMode: 'dynamic',
         minItems: 0,
       };
 

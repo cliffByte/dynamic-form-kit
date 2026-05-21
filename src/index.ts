@@ -22,7 +22,17 @@ export { FormPreviewModal } from './components/FormPreviewModal';
 export { SubmissionDataModal } from './components/SubmissionDataModal';
 export * from './components/runtime';
 
-export type { FormField, FormTemplate } from './types/form';
+export type {
+  FormField,
+  FormSchema,
+  FormTemplate,
+  TableColumn,
+  TableColumnGroup,
+  TableRowConfig,
+  OptionConfig,
+  ConditionalRule,
+  DynamicDataSource,
+} from './types/form';
 export type {
   EnhancedFormSubmission,
   FormSubmissionData,
