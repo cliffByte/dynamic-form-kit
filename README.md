@@ -262,6 +262,31 @@ Use `extractSchemaFields(form)` from the package if you need the array explicitl
 
 Submitted `values` are keyed by **field `id`** (nested structure for sections/arrays/tables is preserved).
 
+### Multi-step forms (`step_section`)
+
+When the schema has **two or more** consecutive `step_section` fields, `FormRenderer` automatically shows:
+
+- Step progress (completed / current / upcoming)
+- Per-step validation before **Next**
+- Full-form Zod validation on final **Submit**
+- Root-level fields outside the step group render on the **last** step
+
+```tsx
+<FormRenderer
+  form={form}
+  stepLabels={{
+    previous: 'Back',
+    next: 'Continue',
+    reset: 'Clear',
+  }}
+  showReset
+  onSubmit={handleSubmit}
+/>
+```
+
+Set `enableMultiStep={false}` to render all steps on one page (legacy flat layout).  
+Helpers: `groupStepSections`, `isMultiStepWizard`, `MultiStepProgress`, `MultiStepFormNav`.
+
 ---
 
 ## 4. View a submission (read-only)
