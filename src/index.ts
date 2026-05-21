@@ -44,7 +44,16 @@ export {
   cleanSubmissionData,
   evaluateFormula,
 } from './lib/formUtils';
-export { validateFormWithZod } from './lib/validationUtils';
+export {
+  validateFieldWithZod,
+  validateFormWithZod,
+  buildFormSchema,
+  buildFieldSchema,
+  getZodSchemaForForm,
+  validateFieldValue,
+  validateFormSubmission,
+} from './lib/validationUtils';
+export { passwordValidation } from './lib/zodValidation';
 export { canAddToRoot } from './lib/dragDropUtils';
 
 export {
@@ -60,6 +69,16 @@ export {
   mapDefaultValuesToFieldIds,
   type FormKitValues,
 } from './lib/submissionUtils';
+
+export {
+  groupStepSections,
+  isMultiStepWizard,
+  markFieldsTouched,
+  scrollToFirstFieldError,
+  findStepIndexForFieldId,
+  type StepGroup,
+  type FormStructure,
+} from './lib/formStepStructure';
 
 export { useDynamicOptions, getNestedValue } from './hooks/useDynamicOptions';
 export { useLocalizedField, useLocalizedFields } from './hooks/useLocalizedField';

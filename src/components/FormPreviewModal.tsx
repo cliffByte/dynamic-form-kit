@@ -21,77 +21,11 @@ import { toast } from 'sonner';
 // Import modular field components
 import { FormFieldRenderer, DynamicOption } from './form-fields';
 import { createFieldMap, shouldShowField } from '../lib/formUtils';
+import { groupStepSections, type StepGroup } from '../lib/formStepStructure';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft, ArrowRight, Check, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
-
-// Type for grouped steps (consecutive step_sections)
-interface StepGroup {
-  steps: FormField[];
-  startIndex: number;
-  endIndex: number;
-}
-
-// Type for form structure after grouping
-interface FormStructure {
-  stepGroups: StepGroup[];
-  nonStepFields: { field: FormField; originalIndex: number }[];
-  hasSteps: boolean;
-}
-
-/**
- * Groups consecutive step_sections together and separates non-step fields
- * This allows us to render multi-step forms with proper navigation
- */
-const groupStepSections = (fields: FormField[]): FormStructure => {
-  const stepGroups: StepGroup[] = [];
-  const nonStepFields: { field: FormField; originalIndex: number }[] = [];
-
-  let currentGroup: FormField[] | null = null;
-  let groupStartIndex = -1;
-
-  fields.forEach((field, index) => {
-    if (field.type === 'step_section') {
-      // Start a new group or add to existing
-      if (currentGroup === null) {
-        currentGroup = [field];
-        groupStartIndex = index;
-      } else {
-        currentGroup.push(field);
-      }
-    } else {
-      // If we have an active group, close it
-      if (currentGroup !== null) {
-        stepGroups.push({
-          steps: currentGroup,
-          startIndex: groupStartIndex,
-          endIndex: index - 1,
-        });
-        currentGroup = null;
-        groupStartIndex = -1;
-      }
-      // Add non-step field
-      nonStepFields.push({ field, originalIndex: index });
-    }
-  });
-
-  // Close any remaining group
-  if (currentGroup !== null) {
-    stepGroups.push({
-      steps: currentGroup,
-      startIndex: groupStartIndex,
-      endIndex: fields.length - 1,
-    });
-  }
-
-  return {
-    stepGroups,
-    nonStepFields,
-    hasSteps:
-      stepGroups.length > 0 && stepGroups.some((g) => g.steps.length > 0),
-  };
-};
 
 interface FormPreviewModalProps {
   fields: FormField[];
