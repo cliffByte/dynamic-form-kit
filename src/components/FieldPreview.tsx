@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { resolveDateConstraint } from '../lib/dateConstraint';
+import { NepaliDatePickerField } from './form-fields/NepaliDatePickerField';
 
 /**
  * Rich text field preview
@@ -222,6 +223,21 @@ export function DatePreview({
   // Normalize dates to midnight for proper comparison
   const dateMin = resolveDateConstraint(field.dateMin);
   const dateMax = resolveDateConstraint(field.dateMax);
+
+  if (useNepaliCalendar && dateMode === 'single') {
+    return (
+      <div role='button' tabIndex={0} onClick={onSelect} onKeyDown={onSelect}>
+        <NepaliDatePickerField
+          disabled
+          showError={false}
+          placeholder={field.placeholder || 'मिति छान्नुहोस्'}
+          minDate={dateMin}
+          maxDate={dateMax}
+          onChange={() => {}}
+        />
+      </div>
+    );
+  }
 
   return (
     <Popover>
