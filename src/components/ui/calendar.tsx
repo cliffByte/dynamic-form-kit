@@ -23,14 +23,10 @@ function Calendar({
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>['variant'];
+  /** @deprecated Nepali forms use NepaliDatePickerField (BS calendar). Kept for previews. */
   useNepaliCalendar?: boolean;
 }) {
   const defaultClassNames = getDefaultClassNames();
-  const formatWithNepaliCalendar = (
-    date: Date,
-    options: Intl.DateTimeFormatOptions,
-  ) =>
-    new Intl.DateTimeFormat('ne-NP-u-ca-bikram-sambat', options).format(date);
 
   return (
     <DayPicker
@@ -44,31 +40,18 @@ function Calendar({
       captionLayout={captionLayout}
       formatters={{
         formatCaption: (date) =>
-          useNepaliCalendar
-            ? formatWithNepaliCalendar(date, {
-                month: 'long',
-                year: 'numeric',
-              })
-            : date.toLocaleDateString(undefined, {
-                month: 'long',
-                year: 'numeric',
-              }),
+          date.toLocaleDateString(undefined, {
+            month: 'long',
+            year: 'numeric',
+          }),
         formatDay: (date) =>
-          useNepaliCalendar
-            ? formatWithNepaliCalendar(date, { day: 'numeric' })
-            : date.toLocaleDateString(undefined, { day: 'numeric' }),
+          date.toLocaleDateString(undefined, { day: 'numeric' }),
         formatWeekdayName: (date) =>
-          useNepaliCalendar
-            ? formatWithNepaliCalendar(date, { weekday: 'short' })
-            : date.toLocaleDateString(undefined, { weekday: 'short' }),
+          date.toLocaleDateString(undefined, { weekday: 'short' }),
         formatMonthDropdown: (date) =>
-          useNepaliCalendar
-            ? formatWithNepaliCalendar(date, { month: 'long' })
-            : date.toLocaleString('default', { month: 'short' }),
+          date.toLocaleString('default', { month: 'short' }),
         formatYearDropdown: (date) =>
-          useNepaliCalendar
-            ? formatWithNepaliCalendar(date, { year: 'numeric' })
-            : date.toLocaleDateString(undefined, { year: 'numeric' }),
+          date.toLocaleDateString(undefined, { year: 'numeric' }),
         ...formatters,
       }}
       classNames={{
