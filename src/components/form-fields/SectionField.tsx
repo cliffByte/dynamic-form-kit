@@ -64,7 +64,7 @@ export const SectionField = React.memo(function SectionField({
       {nestedFields.length > 0 && (
         <div
           className={cn(
-            'p-4',
+            'p-4 overflow-visible',
             !isGrid
               ? 'flex flex-col gap-8'
               : cn(

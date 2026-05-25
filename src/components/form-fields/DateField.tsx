@@ -10,20 +10,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '../ui/popover';
-import {
-  NepaliDatePicker,
-  getNepaliDate,
-  makeDualDateValueFromAd,
-  type DualDateValue,
-} from '@etpl/nepali-datepicker';
 import { FieldWrapper } from './FieldWrapper';
 import { BaseFieldProps } from './types';
 import { cn } from '../../lib/utils';
 import { isTodayConstraint, resolveDateConstraint } from '../../lib/dateConstraint';
 import { useFormKit } from '../../context/FormKitContext';
+import { formatNepaliDateDisplay } from '../../lib/nepaliCalendar';
+import {
+  NepaliDatePickerField,
+  NepaliDateRangePickerField,
+} from './NepaliDatePickerField';
 
-/** Above section borders and other form overlays (popover uses this via zIndex prop). */
-const NEPALI_DATEPICKER_Z_INDEX = 10050;
+/** Above stacked form fields and section cards (Radix portal). */
+const DATE_POPOVER_Z_CLASS = 'z-[200]';
 
 /**
  * Date picker field with single date and date range support
@@ -46,8 +45,6 @@ export function DateField({
   const dateMode = field.dateMode || 'single';
   const dateMin = resolveDateConstraint(field.dateMin);
   const dateMax = resolveDateConstraint(field.dateMax);
-  const nepaliMinDate = dateMin ? getNepaliDate(dateMin) : undefined;
-  const nepaliMaxDate = dateMax ? getNepaliDate(dateMax) : undefined;
 
   const normalizeDate = (date: Date) => {
     const normalized = new Date(date);
@@ -55,19 +52,9 @@ export function DateField({
     return normalized;
   };
 
-  const formatDateForDisplay = (date: Date) => {
-    if (useNepaliCalendar) {
-      return new Intl.DateTimeFormat('ne-NP-u-ca-bikram-sambat', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(date);
-    }
+  const formatDateForDisplay = (date: Date) =>
+    useNepaliCalendar ? formatNepaliDateDisplay(date) : format(date, 'PPP');
 
-    return format(date, 'PPP');
-  };
-
-  // Parse value based on mode
   let selectedDate: Date | undefined;
   let selectedDateRange:
     | { from: Date | undefined; to?: Date | undefined }
@@ -106,17 +93,13 @@ export function DateField({
     return false;
   };
 
-  const nepaliSingleValue = selectedDate
-    ? makeDualDateValueFromAd(selectedDate)
-    : null;
+  const nepaliPlaceholder =
+    field.placeholder ||
+    (dateMode === 'range' ? 'मिति दायरा छान्नुहोस्' : 'मिति छान्नुहोस्');
 
-  const nepaliRangeStart = selectedDateRange?.from
-    ? makeDualDateValueFromAd(selectedDateRange.from)
-    : null;
-
-  const nepaliRangeEnd = selectedDateRange?.to
-    ? makeDualDateValueFromAd(selectedDateRange.to)
-    : null;
+  const englishPlaceholder =
+    field.placeholder ||
+    (dateMode === 'range' ? 'Pick a date range' : 'Pick a date');
 
   return (
     <FieldWrapper
@@ -128,70 +111,33 @@ export function DateField({
       errorMessage={errorMessage}
       className={className}>
       {useNepaliCalendar ? (
-        <div
-          className={cn(
-            'relative z-[100]',
-            showError && '[&_.ndc-input]:border-red-500',
-          )}>
-          <NepaliDatePicker
-            id={field.id}
-            variant='dropdown'
-            zIndex={NEPALI_DATEPICKER_Z_INDEX}
-            calendarSystem='BS'
-            language='ne'
-            showCalendarSystemToggle={false}
-            showLanguageToggle={false}
-            showSecondaryDate
+        dateMode === 'range' ? (
+          <NepaliDateRangePickerField
             disabled={disabled}
-            placeholder={
-              field.placeholder ||
-              (dateMode === 'range'
-                ? 'मिति दायरा छान्नुहोस्'
-                : 'मिति छान्नुहोस्')
+            showError={showError}
+            minDate={dateMin}
+            maxDate={dateMax}
+            value={
+              value && typeof value === 'object' && !Array.isArray(value)
+                ? { from: value.from, to: value.to }
+                : undefined
             }
-            selectionType={dateMode === 'range' ? 'range' : 'single'}
-            minDate={nepaliMinDate}
-            maxDate={nepaliMaxDate}
-            value={dateMode === 'single' ? nepaliSingleValue : undefined}
-            startValue={dateMode === 'range' ? nepaliRangeStart : undefined}
-            endValue={dateMode === 'range' ? nepaliRangeEnd : undefined}
-            onChange={(selected: DualDateValue | null) => {
-              if (dateMode !== 'single') return;
-              if (!selected) {
-                onChange('');
-                return;
-              }
-              if (disabledDates(selected.ad)) return;
-              onChange(selected.ad.toISOString());
-              onBlur?.();
-            }}
-            onRangeChange={(start, end) => {
-              if (dateMode !== 'range') return;
-              const startDate = start?.ad;
-              const endDate = end?.ad;
-
-              if (startDate && disabledDates(startDate)) return;
-              if (endDate && disabledDates(endDate)) return;
-              if (
-                startDate &&
-                endDate &&
-                normalizeDate(startDate) > normalizeDate(endDate)
-              ) {
-                return;
-              }
-
-              onChange({
-                from: startDate?.toISOString() || '',
-                to: endDate?.toISOString() || '',
-              });
-
-              if (startDate && endDate) {
-                onBlur?.();
-              }
-            }}
-            disabledFn={(dual) => disabledDates(dual.ad)}
+            onChange={(range) => onChange(range)}
+            onBlur={onBlur}
           />
-        </div>
+        ) : (
+          <NepaliDatePickerField
+            id={field.id}
+            disabled={disabled}
+            showError={showError}
+            placeholder={nepaliPlaceholder}
+            minDate={dateMin}
+            maxDate={dateMax}
+            value={typeof value === 'string' ? value : undefined}
+            onChange={(iso) => onChange(iso)}
+            onBlur={onBlur}
+          />
+        )
       ) : (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
           <PopoverTrigger asChild>
@@ -208,13 +154,13 @@ export function DateField({
               )}>
               <CalendarIcon className='mr-2 h-4 w-4 shrink-0' />
               <span className='truncate'>
-                {displayValue ||
-                  field.placeholder ||
-                  (dateMode === 'range' ? 'Pick a date range' : 'Pick a date')}
+                {displayValue || englishPlaceholder}
               </span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className='w-auto p-0' align='start'>
+          <PopoverContent
+            className={cn('w-auto p-0', DATE_POPOVER_Z_CLASS)}
+            align='start'>
             {dateMode === 'range' ? (
               <Calendar
                 mode='range'
@@ -233,7 +179,7 @@ export function DateField({
                 }}
                 disabled={disabledDates}
                 numberOfMonths={2}
-                useNepaliCalendar={useNepaliCalendar}
+                useNepaliCalendar={false}
                 initialFocus
                 className='rounded-md border'
               />
@@ -249,7 +195,7 @@ export function DateField({
                   }
                 }}
                 disabled={disabledDates}
-                useNepaliCalendar={useNepaliCalendar}
+                useNepaliCalendar={false}
                 initialFocus
                 className='rounded-md border'
               />
@@ -258,7 +204,6 @@ export function DateField({
         </Popover>
       )}
 
-      {/* Date constraints hint */}
       {(dateMin || dateMax) && (
         <p className='text-xs text-muted-foreground mt-1'>
           {dateMin &&

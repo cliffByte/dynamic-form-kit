@@ -14,6 +14,7 @@ import {
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../../../../lib/utils';
+import { formatNepaliDateDisplay } from '../../../../../lib/nepaliCalendar';
 
 interface DateSettingsEditorProps {
   field: FormField;
@@ -28,17 +29,8 @@ export const DateSettingsEditor: React.FC<DateSettingsEditorProps> = ({
 
   const useNepaliCalendar = field.dateUseNepaliCalendar ?? false;
 
-  const formatDateLabel = (date: Date) => {
-    if (useNepaliCalendar) {
-      return new Intl.DateTimeFormat('ne-NP-u-ca-bikram-sambat', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(date);
-    }
-
-    return format(date, 'PPP');
-  };
+  const formatDateLabel = (date: Date) =>
+    useNepaliCalendar ? formatNepaliDateDisplay(date) : format(date, 'PPP');
 
   return (
     <div className='grid grid-cols-2 gap-4 border-t pt-4'>
