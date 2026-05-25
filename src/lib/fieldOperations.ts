@@ -98,6 +98,13 @@ function getTypeSpecificProperties(
     case 'date':
       return {
         dateUseNepaliCalendar: false,
+        placeholder: 'Pick a date',
+      };
+
+    case 'nepali_unicode':
+      return {
+        label: 'Nepali Unicode Field',
+        placeholder: 'Type in Romanized Nepali...',
       };
 
     case 'rich_text':

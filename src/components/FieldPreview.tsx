@@ -544,6 +544,7 @@ export function FieldPreview({
     case 'text':
     case 'email':
     case 'number':
+    case 'nepali_unicode':
       return <TextInputPreview field={field} />;
 
     case 'phone':

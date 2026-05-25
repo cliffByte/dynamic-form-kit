@@ -143,9 +143,18 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
       </div>
 
       {/* Placeholder */}
-      {['text', 'email', 'phone', 'number', 'textarea', 'select', 'multi_select', 'rich_text_input'].includes(
-        field.type,
-      ) && (
+      {[
+        'text',
+        'email',
+        'phone',
+        'number',
+        'textarea',
+        'select',
+        'multi_select',
+        'rich_text_input',
+        'nepali_unicode',
+        'date',
+      ].includes(field.type) && (
         <div className='space-y-2'>
           <Label htmlFor='field-placeholder'>
             Placeholder {!isEn && `(${editingLocale.toUpperCase()})`}
@@ -165,9 +174,15 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
       )}
 
       {/* Text/Number/Phone specific validations */}
-      {['text', 'textarea', 'email', 'number', 'phone', 'rich_text_input'].includes(
-        field.type,
-      ) && (
+      {[
+        'text',
+        'textarea',
+        'email',
+        'number',
+        'phone',
+        'rich_text_input',
+        'nepali_unicode',
+      ].includes(field.type) && (
         <div className='space-y-4'>
           <div className='grid grid-cols-2 gap-4'>
             <div className='space-y-2'>
