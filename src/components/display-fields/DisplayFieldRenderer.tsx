@@ -13,6 +13,7 @@ import { DisplayRatingField } from './DisplayRatingField';
 import { DisplayRangeField } from './DisplayRangeField';
 import { DisplayArrayField } from './DisplayArrayField';
 import { DisplayRichTextInputField } from './DisplayRichTextInputField';
+import { DisplayDateField } from './DisplayDateField';
 import { cn } from '../../lib/utils';
 import { useLocalizedField } from '../../hooks/useLocalizedField';
 
@@ -90,6 +91,9 @@ export function DisplayFieldRenderer({
 
     case 'range':
       return <DisplayRangeField {...commonProps} />;
+
+    case 'date':
+      return <DisplayDateField {...commonProps} />;
 
     case 'array':
       return (

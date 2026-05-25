@@ -8,6 +8,7 @@ export * from './DisplayMatrixField';
 export * from './DisplayTableField';
 export * from './DisplayRatingField';
 export * from './DisplayRangeField';
+export * from './DisplayDateField';
 export * from './DisplayArrayField';
 export * from './DisplayRichTextInputField';
 export * from './types';
