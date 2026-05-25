@@ -630,7 +630,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
           <Card
             id={`field-${field.id}`}
             className={cn(
-              'border rounded-lg p-4 bg-gradient-to-b from-muted/30 to-transparent',
+              'border rounded-lg p-4 bg-gradient-to-b from-muted/30 to-transparent overflow-visible',
               'transition-all duration-200 hover:shadow-sm',
             )}>
             <div className='border-b pb-4 mb-4'>
@@ -906,7 +906,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
 
       {/* Preview Modal */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className='max-w-7xl h-[90vh] p-0 flex flex-col overflow-hidden'>
+        <DialogContent className='max-w-7xl h-[90vh] p-0 flex flex-col overflow-visible'>
           <DialogTitle className='sr-only'>Form Preview</DialogTitle>
 
           {/* Header */}
@@ -925,8 +925,8 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
           </div>
 
           {/* Form Content */}
-          <div className='flex-1 overflow-y-auto'>
-            <div className='max-w-7xl mx-auto py-8 px-6'>
+          <div className='flex-1 min-h-0 overflow-visible'>
+            <div className='max-w-7xl mx-auto py-8 px-6 max-h-full overflow-y-auto overscroll-contain'>
               <form onSubmit={handleFormSubmit} className='space-y-4'>
                 {localizedFields.length > 0 ? (
                   formStructure.hasSteps &&
