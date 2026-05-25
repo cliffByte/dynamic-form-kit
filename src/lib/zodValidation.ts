@@ -7,6 +7,18 @@ import {
   getLanguageErrorMessage,
 } from './languageValidation';
 import { resolveDateConstraint } from './dateConstraint';
+import { parseStoredDateValue } from './nepaliCalendar';
+
+function resolveSubmittedDate(
+  val: string | Date | undefined,
+  useNepaliCalendar: boolean,
+): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return Number.isNaN(val.getTime()) ? null : val;
+  }
+  return parseStoredDateValue(val, useNepaliCalendar);
+}
 
 /**
  * Reusable password schema for strict validation
@@ -188,8 +200,9 @@ export function buildFieldSchema(
       }
       break;
 
-    case 'date':
+    case 'date': {
       const dateMode = field.dateMode || 'single';
+      const useNepaliCalendar = field.dateUseNepaliCalendar ?? false;
       if (dateMode === 'range') {
         // Range mode: value is { from: Date | undefined, to?: Date | undefined }
         schema = z
@@ -201,26 +214,23 @@ export function buildFieldSchema(
             (val) => {
               // If from is provided, it must be valid
               if (val.from) {
-                const fromDate =
-                  typeof val.from === 'string' ? new Date(val.from) : val.from;
-                if (!(fromDate instanceof Date) || isNaN(fromDate.getTime())) {
+                const fromDate = resolveSubmittedDate(val.from, useNepaliCalendar);
+                if (!fromDate) {
                   return false;
                 }
               }
               // If to is provided, it must be valid
               if (val.to) {
-                const toDate =
-                  typeof val.to === 'string' ? new Date(val.to) : val.to;
-                if (!(toDate instanceof Date) || isNaN(toDate.getTime())) {
+                const toDate = resolveSubmittedDate(val.to, useNepaliCalendar);
+                if (!toDate) {
                   return false;
                 }
               }
               // If both are provided, from must be before or equal to to
               if (val.from && val.to) {
-                const fromDate =
-                  typeof val.from === 'string' ? new Date(val.from) : val.from;
-                const toDate =
-                  typeof val.to === 'string' ? new Date(val.to) : val.to;
+                const fromDate = resolveSubmittedDate(val.from, useNepaliCalendar);
+                const toDate = resolveSubmittedDate(val.to, useNepaliCalendar);
+                if (!fromDate || !toDate) return false;
                 const normalizedFrom = new Date(fromDate);
                 const normalizedTo = new Date(toDate);
                 normalizedFrom.setHours(0, 0, 0, 0);
@@ -231,10 +241,9 @@ export function buildFieldSchema(
               }
               // Check min/max date constraints
               if (field.dateMin && val.from) {
-                const fromDate =
-                  typeof val.from === 'string' ? new Date(val.from) : val.from;
+                const fromDate = resolveSubmittedDate(val.from, useNepaliCalendar);
                 const minDate = resolveDateConstraint(field.dateMin);
-                if (!minDate) return false;
+                if (!fromDate || !minDate) return false;
                 const normalizedFrom = new Date(fromDate);
                 normalizedFrom.setHours(0, 0, 0, 0);
                 if (normalizedFrom < minDate) {
@@ -242,10 +251,9 @@ export function buildFieldSchema(
                 }
               }
               if (field.dateMax && val.to) {
-                const toDate =
-                  typeof val.to === 'string' ? new Date(val.to) : val.to;
+                const toDate = resolveSubmittedDate(val.to, useNepaliCalendar);
                 const maxDate = resolveDateConstraint(field.dateMax);
-                if (!maxDate) return false;
+                if (!toDate || !maxDate) return false;
                 const normalizedTo = new Date(toDate);
                 normalizedTo.setHours(0, 0, 0, 0);
                 if (normalizedTo > maxDate) {
@@ -254,10 +262,9 @@ export function buildFieldSchema(
               }
               // Also check max date constraint on 'from' if to is not set
               if (field.dateMax && val.from && !val.to) {
-                const fromDate =
-                  typeof val.from === 'string' ? new Date(val.from) : val.from;
+                const fromDate = resolveSubmittedDate(val.from, useNepaliCalendar);
                 const maxDate = resolveDateConstraint(field.dateMax);
-                if (!maxDate) return false;
+                if (!fromDate || !maxDate) return false;
                 const normalizedFrom = new Date(fromDate);
                 normalizedFrom.setHours(0, 0, 0, 0);
                 if (normalizedFrom > maxDate) {
@@ -275,12 +282,13 @@ export function buildFieldSchema(
         schema = z.union([z.string(), z.date()]).refine(
           (val) => {
             if (!val) return false;
-            const date = typeof val === 'string' ? new Date(val) : val;
-            if (!(date instanceof Date) || isNaN(date.getTime())) {
+            const dateObj = resolveSubmittedDate(
+              typeof val === 'string' ? val : val,
+              useNepaliCalendar,
+            );
+            if (!dateObj) {
               return false;
             }
-            // Check min/max date constraints
-            const dateObj = typeof val === 'string' ? new Date(val) : val;
             dateObj.setHours(0, 0, 0, 0);
             if (field.dateMin) {
               const minDate = resolveDateConstraint(field.dateMin);
@@ -304,6 +312,7 @@ export function buildFieldSchema(
         );
       }
       break;
+    }
 
     case 'select':
     case 'radio':

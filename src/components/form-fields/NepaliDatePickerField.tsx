@@ -7,8 +7,8 @@ import '@zener/nepali-datepicker-react/index.css';
 import { cn } from '../../lib/utils';
 import {
   adDateToNepaliDate,
-  isoToNepaliDate,
-  nepaliDateToIso,
+  storageValueToNepaliDate,
+  nepaliDateToStorageValue,
 } from '../../lib/nepaliCalendar';
 
 const INPUT_CLASS =
@@ -37,7 +37,7 @@ export function NepaliDatePickerField({
   onChange,
   onBlur,
 }: NepaliDatePickerFieldProps) {
-  const pickerValue = isoToNepaliDate(value);
+  const pickerValue = storageValueToNepaliDate(value);
 
   return (
     <NepaliDatePicker
@@ -56,7 +56,7 @@ export function NepaliDatePickerField({
         disabled: cn(INPUT_CLASS, 'zener-opacity-50'),
       })}
       onChange={(date: NepaliDate | null) => {
-        onChange(nepaliDateToIso(date));
+        onChange(nepaliDateToStorageValue(date));
         if (date) onBlur?.();
       }}
     />
@@ -86,12 +86,12 @@ export function NepaliDateRangePickerField({
   onChange,
   onBlur,
 }: NepaliDateRangePickerFieldProps) {
-  const startValue = value?.from ? isoToNepaliDate(value.from) : null;
-  const endValue = value?.to ? isoToNepaliDate(value.to) : null;
+  const startValue = value?.from ? storageValueToNepaliDate(value.from) : null;
+  const endValue = value?.to ? storageValueToNepaliDate(value.to) : null;
 
   const handleStart = (date: NepaliDate | null) => {
     onChange({
-      from: nepaliDateToIso(date),
+      from: nepaliDateToStorageValue(date),
       to: value?.to || '',
     });
   };
@@ -99,7 +99,7 @@ export function NepaliDateRangePickerField({
   const handleEnd = (date: NepaliDate | null) => {
     const next = {
       from: value?.from || '',
-      to: nepaliDateToIso(date),
+      to: nepaliDateToStorageValue(date),
     };
     onChange(next);
     if (next.from && next.to) onBlur?.();

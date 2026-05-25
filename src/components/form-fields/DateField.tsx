@@ -15,7 +15,10 @@ import { BaseFieldProps } from './types';
 import { cn } from '../../lib/utils';
 import { isTodayConstraint, resolveDateConstraint } from '../../lib/dateConstraint';
 import { useFormKit } from '../../context/FormKitContext';
-import { formatNepaliDateDisplay } from '../../lib/nepaliCalendar';
+import {
+  formatNepaliDateDisplay,
+  parseStoredDateValue,
+} from '../../lib/nepaliCalendar';
 import {
   NepaliDatePickerField,
   NepaliDateRangePickerField,
@@ -60,15 +63,21 @@ export function DateField({
     | { from: Date | undefined; to?: Date | undefined }
     | undefined;
 
+  const toDate = (raw: unknown) => {
+    if (!raw || typeof raw !== 'string') return undefined;
+    return parseStoredDateValue(raw, useNepaliCalendar) ?? undefined;
+  };
+
   if (dateMode === 'range') {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       selectedDateRange = {
-        from: value.from ? new Date(value.from) : undefined,
-        to: value.to ? new Date(value.to) : undefined,
+        from: value.from ? toDate(value.from) : undefined,
+        to: value.to ? toDate(value.to) : undefined,
       };
     }
   } else {
-    selectedDate = value ? new Date(value) : undefined;
+    selectedDate =
+      typeof value === 'string' ? toDate(value) : value ? new Date(value) : undefined;
   }
 
   const formatDisplayValue = () => {
