@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { sanitizeMultiChoiceFieldValue } from '../../lib/fieldValueUtils';
 import { Checkbox } from '../ui/checkbox';
 import {
   FieldWrapper,
@@ -34,12 +36,25 @@ export function CheckboxField({
   parentFieldName,
   renderField,
 }: DynamicFieldProps) {
-  const selectedValues: string[] = Array.isArray(value) ? value : [];
+  const selectedValues: string[] = sanitizeMultiChoiceFieldValue(field, value);
+
+  useEffect(() => {
+    if (field.isDynamic) return;
+    const raw = Array.isArray(value) ? value.map(String) : [];
+    if (
+      raw.length !== selectedValues.length ||
+      raw.some((v, i) => v !== selectedValues[i])
+    ) {
+      onChange(selectedValues);
+    }
+  }, [field, value, selectedValues, onChange]);
 
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
-    : field.optionConfigs?.map((c) => ({ label: c.label, value: c.value })) ||
+    : field.optionConfigs
+        ?.filter((c) => c.value !== '')
+        .map((c) => ({ label: c.label, value: c.value })) ||
       field.options?.map((o) => ({ label: o, value: o })) ||
       [];
 

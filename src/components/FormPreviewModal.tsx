@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 // Import modular field components
 import { FormFieldRenderer, DynamicOption } from './form-fields';
 import { createFieldMap, shouldShowField } from '../lib/formUtils';
-import { groupStepSections, type StepGroup } from '../lib/formStepStructure';
+import { groupStepSections, type StepGroup, validateStepSection, validateWizardSteps, mergeStepValidationErrors, getStepVisibleFieldIds } from '../lib/formStepStructure';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft, ArrowRight, Check, Eye } from 'lucide-react';
@@ -316,116 +316,12 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
 
   // Validate a specific step's fields
   const validateStepFields = useCallback((stepField: FormField): boolean => {
-    const errors: Record<string, string> = {};
-    const currentFormData = formDataRef.current;
-
-    const validateFields = (fields: FormField[]) => {
-      fields.forEach((field) => {
-        if (field.isHidden || field.type === 'rich_text') return;
-
-        const value = currentFormData[field.id];
-
-        if (field.required) {
-          if (
-            value === undefined ||
-            value === null ||
-            value === '' ||
-            (Array.isArray(value) && value.length === 0)
-          ) {
-            errors[field.id] = `${field.label} is required`;
-          }
-        }
-
-        if (field.type === 'email' && value) {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(value)) {
-            errors[field.id] = 'Please enter a valid email address';
-          }
-        }
-
-        // Text-based fields: validate length
-        if (
-          ['text', 'textarea', 'email', 'rich_text_input'].includes(
-            field.type,
-          ) &&
-          value &&
-          typeof value === 'string'
-        ) {
-          const length = value.length;
-          if (
-            field.validation?.min !== undefined &&
-            length < field.validation.min
-          ) {
-            errors[field.id] =
-              `${field.label} must be at least ${field.validation.min} characters`;
-          }
-          if (
-            field.validation?.max !== undefined &&
-            length > field.validation.max
-          ) {
-            errors[field.id] =
-              `${field.label} must not exceed ${field.validation.max} characters`;
-          }
-        }
-
-        // Phone field: validate digit count
-        if (field.type === 'phone' && value) {
-          const digitCount = value.replace(/\D/g, '').length;
-
-          if (
-            field.validation?.min !== undefined &&
-            digitCount < field.validation.min
-          ) {
-            errors[field.id] =
-              `${field.label} must have at least ${field.validation.min} digits`;
-          }
-          if (
-            field.validation?.max !== undefined &&
-            digitCount > field.validation.max
-          ) {
-            errors[field.id] =
-              `${field.label} must not exceed ${field.validation.max} digits`;
-          }
-
-          // Default max of 15 digits if not specified
-          if (!field.validation?.max && digitCount > 15) {
-            errors[field.id] = `${field.label} must not exceed 15 digits`;
-          }
-        }
-
-        // Number field: validate numeric value
-        if (
-          field.type === 'number' &&
-          value !== undefined &&
-          value !== '' &&
-          value !== null
-        ) {
-          if (
-            field.validation?.min !== undefined &&
-            value < field.validation.min
-          ) {
-            errors[field.id] = `Value must be at least ${field.validation.min}`;
-          }
-          if (
-            field.validation?.max !== undefined &&
-            value > field.validation.max
-          ) {
-            errors[field.id] = `Value must be at most ${field.validation.max}`;
-          }
-        }
-
-        if (field.fields) {
-          validateFields(field.fields);
-        }
-      });
-    };
-
-    if (stepField.fields) {
-      validateFields(stepField.fields);
-    }
-
-    setValidationErrors((prev) => ({ ...prev, ...errors }));
-    return Object.keys(errors).length === 0;
+    const result = validateStepSection(stepField, formDataRef.current);
+    const stepFieldIds = getStepVisibleFieldIds(stepField, formDataRef.current);
+    setValidationErrors((prev) =>
+      mergeStepValidationErrors(prev, stepFieldIds, result.errors),
+    );
+    return result.isValid;
   }, []);
 
   // Navigate to next step
@@ -748,8 +644,31 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
       }
     }
 
-    // Validate using Zod
-    const result = validateFormWithZod(localizedFields, formData);
+    // Validate step-by-step for multi-step forms, or the full form for single-page
+    const isMultiStepWizard =
+      formStructure.hasSteps &&
+      activeStepGroup &&
+      activeStepGroup.steps.length > 1;
+
+    const result = isMultiStepWizard
+      ? (() => {
+          const wizardResult = validateWizardSteps({
+            steps: activeStepGroup!.steps,
+            nonStepFields: formStructure.nonStepFields.map(({ field }) => field),
+            values: formData,
+          });
+          if (
+            !wizardResult.isValid &&
+            wizardResult.firstInvalidStepIndex !== -1
+          ) {
+            setCurrentStepIndex(wizardResult.firstInvalidStepIndex);
+          }
+          return {
+            isValid: wizardResult.isValid,
+            errors: wizardResult.errors,
+          };
+        })()
+      : validateFormWithZod(localizedFields, formData);
 
     if (result.isValid) {
       // Build complete form data with defaults

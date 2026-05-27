@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { sanitizeChoiceFieldValue } from '../../lib/fieldValueUtils';
 import {
   Select,
   SelectContent,
@@ -42,15 +44,26 @@ export function SelectField({
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
-    : field.optionConfigs?.map((c) => ({ label: c.label, value: c.value })) ||
+    : field.optionConfigs
+        ?.filter((c) => c.value !== '')
+        .map((c) => ({ label: c.label, value: c.value })) ||
       field.options?.map((o) => ({ label: o, value: o })) ||
       [];
+
+  const sanitizedValue = sanitizeChoiceFieldValue(field, value);
+
+  useEffect(() => {
+    if (field.isDynamic) return;
+    if (value && sanitizedValue === undefined) {
+      onChange('');
+    }
+  }, [field, value, sanitizedValue, onChange]);
 
   const shouldShowParentRequired = isDependent && !parentHasValue;
 
   // Find the selected option's nested form (if any)
   const selectedOptionConfig = field.optionConfigs?.find(
-    (c) => c.value === value,
+    (c) => c.value === sanitizedValue,
   );
   const nestedForm = selectedOptionConfig?.nestedForm;
 
@@ -87,7 +100,7 @@ export function SelectField({
       ) : (
         <div className='space-y-3'>
           <Select
-            value={value || ''}
+            value={sanitizedValue}
             onValueChange={(val) => {
               onChange(val);
               onBlur?.();

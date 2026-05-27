@@ -1,4 +1,7 @@
 import type { FormField } from '../types/form';
+import type { FormSubmissionData } from '../types/submission';
+import { shouldShowField } from './formUtils';
+import { validateFormWithZod } from './zodValidation';
 
 export interface StepGroup {
   steps: FormField[];
@@ -156,4 +159,143 @@ export function findStepIndexForFieldId(
   return steps.findIndex(
     (step) => step.fields?.length && containsField(step.fields),
   );
+}
+
+/**
+ * Collect fields visible in the current form state (respects conditional logic).
+ */
+export function collectVisibleFields(
+  fields: FormField[],
+  values: FormSubmissionData,
+): FormField[] {
+  const out: FormField[] = [];
+
+  const walk = (list: FormField[]) => {
+    for (const field of list) {
+      if (field.isHidden) continue;
+      if (!shouldShowField(field, values)) continue;
+
+      out.push(field);
+
+      if (Array.isArray(field.fields) && field.fields.length > 0) {
+        walk(field.fields);
+      }
+
+      if (field.optionConfigs?.length) {
+        const val = values[field.id];
+        for (const opt of field.optionConfigs) {
+          const isSelected = Array.isArray(val)
+            ? val.includes(opt.value)
+            : val === opt.value;
+          if (isSelected && opt.nestedForm?.fields?.length) {
+            walk(opt.nestedForm.fields);
+          }
+        }
+      }
+    }
+  };
+
+  walk(fields);
+  return out;
+}
+
+function pickSubmissionValuesForFields(
+  visibleFields: FormField[],
+  values: FormSubmissionData,
+): FormSubmissionData {
+  const picked: FormSubmissionData = {};
+  for (const field of visibleFields) {
+    if (values[field.id] !== undefined) {
+      picked[field.id] = values[field.id];
+    }
+  }
+  return picked;
+}
+
+/** Field ids currently visible within a wizard step. */
+export function getStepVisibleFieldIds(
+  stepField: FormField,
+  values: FormSubmissionData,
+): string[] {
+  return collectVisibleFields(stepField.fields ?? [], values).map((f) => f.id);
+}
+
+/**
+ * Validate only the visible fields belonging to a single wizard step.
+ */
+export function validateStepSection(
+  stepField: FormField,
+  values: FormSubmissionData,
+  locale?: string,
+): { isValid: boolean; errors: Record<string, string> } {
+  const stepFields = stepField.fields ?? [];
+  const visibleFields = collectVisibleFields(stepFields, values);
+
+  if (visibleFields.length === 0) {
+    return { isValid: true, errors: {} };
+  }
+
+  const stepData = pickSubmissionValuesForFields(visibleFields, values);
+  return validateFormWithZod(visibleFields, stepData, locale);
+}
+
+export interface WizardValidationOptions {
+  steps: FormField[];
+  nonStepFields?: FormField[];
+  values: FormSubmissionData;
+  locale?: string;
+}
+
+/**
+ * Validate each wizard step in order, then any root fields shown after steps.
+ * Returns the first step index that failed validation.
+ */
+export function validateWizardSteps(
+  options: WizardValidationOptions,
+): {
+  isValid: boolean;
+  errors: Record<string, string>;
+  firstInvalidStepIndex: number;
+} {
+  const { steps, nonStepFields = [], values, locale } = options;
+  const allErrors: Record<string, string> = {};
+
+  for (let i = 0; i < steps.length; i++) {
+    const result = validateStepSection(steps[i], values, locale);
+    if (!result.isValid) {
+      Object.assign(allErrors, result.errors);
+      return { isValid: false, errors: allErrors, firstInvalidStepIndex: i };
+    }
+  }
+
+  if (nonStepFields.length > 0) {
+    const visible = collectVisibleFields(nonStepFields, values);
+    if (visible.length > 0) {
+      const data = pickSubmissionValuesForFields(visible, values);
+      const result = validateFormWithZod(visible, data, locale);
+      if (!result.isValid) {
+        Object.assign(allErrors, result.errors);
+        return {
+          isValid: false,
+          errors: allErrors,
+          firstInvalidStepIndex: Math.max(steps.length - 1, 0),
+        };
+      }
+    }
+  }
+
+  return { isValid: true, errors: {}, firstInvalidStepIndex: -1 };
+}
+
+/** Replace step-scoped errors while preserving errors from other steps. */
+export function mergeStepValidationErrors(
+  prev: Record<string, string>,
+  stepFieldIds: string[],
+  stepErrors: Record<string, string>,
+): Record<string, string> {
+  const next = { ...prev };
+  for (const id of stepFieldIds) {
+    delete next[id];
+  }
+  return { ...next, ...stepErrors };
 }

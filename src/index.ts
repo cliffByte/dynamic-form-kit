@@ -88,8 +88,14 @@ export {
   markFieldsTouched,
   scrollToFirstFieldError,
   findStepIndexForFieldId,
+  collectVisibleFields,
+  getStepVisibleFieldIds,
+  validateStepSection,
+  validateWizardSteps,
+  mergeStepValidationErrors,
   type StepGroup,
   type FormStructure,
+  type WizardValidationOptions,
 } from './lib/formStepStructure';
 
 export { useDynamicOptions, getNestedValue } from './hooks/useDynamicOptions';

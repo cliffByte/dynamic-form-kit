@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { sanitizeChoiceFieldValue } from '../../lib/fieldValueUtils';
 import { Loader2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Label } from '../ui/label';
@@ -39,15 +40,26 @@ export function RadioField({
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
-    : field.optionConfigs?.map((c) => ({ label: c.label, value: c.value })) ||
+    : field.optionConfigs
+        ?.filter((c) => c.value !== '')
+        .map((c) => ({ label: c.label, value: c.value })) ||
       field.options?.map((o) => ({ label: o, value: o })) ||
       [];
+
+  const sanitizedValue = sanitizeChoiceFieldValue(field, value);
+
+  useEffect(() => {
+    if (field.isDynamic) return;
+    if (value && sanitizedValue === undefined) {
+      onChange('');
+    }
+  }, [field, value, sanitizedValue, onChange]);
 
   const shouldShowParentRequired = isDependent && !parentHasValue;
 
   // Find the selected option's nested form (if any)
   const selectedOptionConfig = field.optionConfigs?.find(
-    (c) => c.value === value,
+    (c) => c.value === sanitizedValue,
   );
   const nestedForm = selectedOptionConfig?.nestedForm;
 
@@ -75,7 +87,7 @@ export function RadioField({
       ) : (
         <div className='space-y-3'>
           <RadioGroup
-            value={value || ''}
+            value={sanitizedValue}
             onValueChange={(val) => {
               onChange(val);
               onBlur?.();
@@ -83,7 +95,7 @@ export function RadioField({
             disabled={disabled}
             className='grid gap-3'>
             {options.map((option) => {
-              const isSelected = value === option.value;
+              const isSelected = sanitizedValue === option.value;
               return (
                 <label
                   key={option.value}

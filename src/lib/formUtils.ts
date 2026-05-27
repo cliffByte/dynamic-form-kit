@@ -263,10 +263,6 @@ export function getFieldById(
   return fieldMap.get(fieldId);
 }
 
-/**
- * Checks if a field should be shown based on conditional logic
- * Single responsibility: Evaluate conditional visibility
- */
 export function shouldShowField(
   field: FormField,
   submissionData: FormSubmissionData,

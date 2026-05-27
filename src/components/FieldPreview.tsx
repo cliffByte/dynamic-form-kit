@@ -111,11 +111,13 @@ export function SelectPreview({
             Options will be loaded from API
           </SelectItem>
         ) : field.optionConfigs && field.optionConfigs.length > 0 ? (
-          field.optionConfigs.map((config, idx) => (
-            <SelectItem key={idx} value={config.value}>
-              {config.label}
-            </SelectItem>
-          ))
+          field.optionConfigs
+            .filter((config) => config.value !== '')
+            .map((config, idx) => (
+              <SelectItem key={idx} value={config.value}>
+                {config.label}
+              </SelectItem>
+            ))
         ) : (
           field.options?.map((option, idx) => (
             <SelectItem key={idx} value={option}>

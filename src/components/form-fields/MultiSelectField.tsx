@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { sanitizeMultiChoiceFieldValue } from '../../lib/fieldValueUtils';
 import { X, Check, Loader2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
@@ -36,12 +37,25 @@ export function MultiSelectField({
   parentFieldName,
   renderField,
 }: DynamicFieldProps) {
-  const selectedValues: string[] = Array.isArray(value) ? value : [];
+  const selectedValues: string[] = sanitizeMultiChoiceFieldValue(field, value);
+
+  useEffect(() => {
+    if (field.isDynamic) return;
+    const raw = Array.isArray(value) ? value.map(String) : [];
+    if (
+      raw.length !== selectedValues.length ||
+      raw.some((v, i) => v !== selectedValues[i])
+    ) {
+      onChange(selectedValues);
+    }
+  }, [field, value, selectedValues, onChange]);
 
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
-    : field.optionConfigs?.map((c) => ({ label: c.label, value: c.value })) ||
+    : field.optionConfigs
+        ?.filter((c) => c.value !== '')
+        .map((c) => ({ label: c.label, value: c.value })) ||
       field.options?.map((o) => ({ label: o, value: o })) ||
       [];
 

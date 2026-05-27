@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FormField } from '../../types/form';
 import { shouldShowField } from '../../lib/formUtils';
+import { collectVisibleFields } from '../../lib/formStepStructure';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
 import { cn } from '../../lib/utils';
 import { FormKitRoot } from '../FormKitRoot';
@@ -16,24 +17,6 @@ type Values = Record<string, any>;
 
 function isDynamicField(field: FormField): boolean {
   return Boolean(field.isDynamic && field.dataSource);
-}
-
-function collectVisibleFields(fields: FormField[], values: Values): FormField[] {
-  const out: FormField[] = [];
-
-  const walk = (list: FormField[]) => {
-    for (const field of list) {
-      if (field.isHidden) continue;
-      if (!shouldShowField(field, values)) continue;
-      out.push(field);
-      if (Array.isArray(field.fields) && field.fields.length > 0) {
-        walk(field.fields);
-      }
-    }
-  };
-
-  walk(fields);
-  return out;
 }
 
 async function fetchDynamicOptionsForField(

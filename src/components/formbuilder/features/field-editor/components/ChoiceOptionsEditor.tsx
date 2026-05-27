@@ -137,11 +137,33 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
     }
   };
 
+  const syncDefaultValueAfterOptionChange = (
+    configs: OptionConfig[],
+    removedValue?: string,
+    previousValue?: string,
+    nextValue?: string,
+  ): Partial<FormField> => {
+    const updates: Partial<FormField> = { optionConfigs: configs };
+
+    if (removedValue !== undefined && field.default_value === removedValue) {
+      updates.default_value = undefined;
+    } else if (
+      previousValue !== undefined &&
+      nextValue !== undefined &&
+      field.default_value === previousValue
+    ) {
+      updates.default_value = nextValue;
+    }
+
+    return updates;
+  };
+
   const updateOptionConfig = (
     index: number,
     updates: Partial<OptionConfig>,
   ) => {
     const newConfigs = [...optionConfigs];
+    const previousValue = optionConfigs[index]?.value;
 
     if (isEn) {
       newConfigs[index] = { ...newConfigs[index], ...updates };
@@ -168,7 +190,18 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
     }
 
     setOptionConfigs(newConfigs);
-    updateField(field.id, { optionConfigs: newConfigs });
+
+    const fieldUpdates =
+      updates.value !== undefined
+        ? syncDefaultValueAfterOptionChange(
+            newConfigs,
+            undefined,
+            previousValue,
+            updates.value,
+          )
+        : { optionConfigs: newConfigs };
+
+    updateField(field.id, fieldUpdates);
   };
 
   const addOptionConfig = () => {
@@ -184,9 +217,13 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
   };
 
   const removeOptionConfig = (index: number) => {
+    const removedValue = optionConfigs[index]?.value;
     const newConfigs = optionConfigs.filter((_, i) => i !== index);
     setOptionConfigs(newConfigs);
-    updateField(field.id, { optionConfigs: newConfigs });
+    updateField(
+      field.id,
+      syncDefaultValueAfterOptionChange(newConfigs, removedValue),
+    );
   };
 
   return (

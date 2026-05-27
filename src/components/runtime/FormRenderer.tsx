@@ -24,7 +24,11 @@ import {
   isMultiStepWizard,
   markFieldsTouched,
   scrollToFirstFieldError,
-  findStepIndexForFieldId,
+  collectVisibleFields,
+  getStepVisibleFieldIds,
+  mergeStepValidationErrors,
+  validateStepSection,
+  validateWizardSteps,
   type StepGroup,
 } from '../../lib/formStepStructure';
 import {
@@ -37,38 +41,6 @@ type Values = Record<string, any>;
 
 function isDynamicField(field: FormField): boolean {
   return Boolean(field.isDynamic && field.dataSource);
-}
-
-function collectVisibleFields(fields: FormField[], values: Values): FormField[] {
-  const out: FormField[] = [];
-
-  const walk = (list: FormField[]) => {
-    for (const field of list) {
-      if (field.isHidden) continue;
-      if (!shouldShowField(field, values)) continue;
-
-      out.push(field);
-
-      if (Array.isArray(field.fields) && field.fields.length > 0) {
-        walk(field.fields);
-      }
-
-      if (field.optionConfigs && field.optionConfigs.length > 0) {
-        const val = values[field.id];
-        for (const opt of field.optionConfigs) {
-          const isSelected = Array.isArray(val)
-            ? val.includes(opt.value)
-            : val === opt.value;
-          if (isSelected && opt.nestedForm?.fields?.length) {
-            walk(opt.nestedForm.fields);
-          }
-        }
-      }
-    }
-  };
-
-  walk(fields);
-  return out;
 }
 
 async function fetchDynamicOptionsForField(
@@ -338,17 +310,11 @@ export function FormRenderer({
 
   const validateCurrentStep = useCallback(
     (stepField: FormField) => {
-      const stepFields = stepField.fields ?? [];
-      if (stepFields.length === 0) {
-        return { isValid: true, errors: {} as Record<string, string> };
-      }
-
-      const result = validateFormWithZod(
-        stepFields,
-        valuesRef.current,
-        locale,
+      const result = validateStepSection(stepField, valuesRef.current, locale);
+      const stepFieldIds = getStepVisibleFieldIds(stepField, valuesRef.current);
+      setValidationErrors((prev) =>
+        mergeStepValidationErrors(prev, stepFieldIds, result.errors),
       );
-      setValidationErrors((prev) => ({ ...prev, ...result.errors }));
       return result;
     },
     [locale],
@@ -494,32 +460,56 @@ export function FormRenderer({
 
   const persistSubmission = useCallback(async () => {
     const rawValues = valuesRef.current;
-    const preUploadCleaned = cleanSubmissionData(rawValues, fields);
-    const validation = validateFormWithZod(fields, preUploadCleaned, locale);
-    setValidationErrors(validation.errors || {});
 
-    if (!validation.isValid) {
-      const nextTouched: Record<string, boolean> = {};
-      collectVisibleFields(fields, rawValues).forEach((f) => {
-        nextTouched[f.id] = true;
+    let validation: { isValid: boolean; errors: Record<string, string> };
+
+    if (useWizard && activeStepGroup) {
+      const wizardResult = validateWizardSteps({
+        steps: activeStepGroup.steps,
+        nonStepFields: formStructure.nonStepFields.map(({ field }) => field),
+        values: rawValues,
+        locale,
       });
-      setTouched(nextTouched);
+      validation = {
+        isValid: wizardResult.isValid,
+        errors: wizardResult.errors,
+      };
 
-      if (useWizard && activeStepGroup) {
-        const firstErrorFieldId = Object.keys(validation.errors)[0];
-        if (firstErrorFieldId) {
-          const stepIndex = findStepIndexForFieldId(
-            activeStepGroup.steps,
-            firstErrorFieldId,
-          );
-          if (stepIndex !== -1 && stepIndex !== currentStepIndex) {
-            setCurrentStepIndex(stepIndex);
-          }
+      if (!wizardResult.isValid) {
+        setValidationErrors(wizardResult.errors);
+
+        const failingStep = activeStepGroup.steps[wizardResult.firstInvalidStepIndex];
+        if (failingStep?.fields?.length) {
+          setTouched((prev) => ({
+            ...prev,
+            ...markFieldsTouched(failingStep.fields!),
+          }));
         }
-      }
 
-      scrollToFirstFieldError(validation.errors);
-      throw new Error('Validation failed');
+        if (
+          wizardResult.firstInvalidStepIndex !== -1 &&
+          wizardResult.firstInvalidStepIndex !== currentStepIndex
+        ) {
+          setCurrentStepIndex(wizardResult.firstInvalidStepIndex);
+        }
+
+        scrollToFirstFieldError(wizardResult.errors);
+        throw new Error('Validation failed');
+      }
+    } else {
+      const preUploadCleaned = cleanSubmissionData(rawValues, fields);
+      validation = validateFormWithZod(fields, preUploadCleaned, locale);
+      setValidationErrors(validation.errors || {});
+
+      if (!validation.isValid) {
+        const nextTouched: Record<string, boolean> = {};
+        collectVisibleFields(fields, rawValues).forEach((f) => {
+          nextTouched[f.id] = true;
+        });
+        setTouched(nextTouched);
+        scrollToFirstFieldError(validation.errors);
+        throw new Error('Validation failed');
+      }
     }
 
     let valuesToSubmit = rawValues;
@@ -541,6 +531,7 @@ export function FormRenderer({
     onSubmit,
     useWizard,
     activeStepGroup,
+    formStructure.nonStepFields,
     currentStepIndex,
     deferMediaUpload,
     uploadMedia,
@@ -554,26 +545,9 @@ export function FormRenderer({
       setSubmitError(null);
 
       try {
-        if (useWizard && activeStepGroup) {
-          const currentStep = activeStepGroup.steps[currentStepIndex];
-          if (currentStep) {
-            const stepValidation = validateCurrentStep(currentStep);
-            if (!stepValidation.isValid) {
-              if (currentStep.fields?.length) {
-                setTouched((prev) => ({
-                  ...prev,
-                  ...markFieldsTouched(currentStep.fields!),
-                }));
-              }
-              scrollToFirstFieldError(stepValidation.errors);
-              throw new Error('Validation failed');
-            }
-          }
-
-          if (!isLastStep) {
-            handleNextStep();
-            return;
-          }
+        if (useWizard && activeStepGroup && !isLastStep) {
+          handleNextStep();
+          return;
         }
 
         const result = await persistSubmission();
@@ -592,8 +566,6 @@ export function FormRenderer({
       saving,
       useWizard,
       activeStepGroup,
-      currentStepIndex,
-      validateCurrentStep,
       isLastStep,
       handleNextStep,
       persistSubmission,

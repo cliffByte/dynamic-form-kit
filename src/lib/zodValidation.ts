@@ -21,6 +21,91 @@ function resolveSubmittedDate(
 }
 
 /**
+ * Whether a submitted value should be treated as empty for validation purposes.
+ */
+export function isEmptyFieldValue(field: FormField, value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+
+  switch (field.type) {
+    case 'checkbox':
+    case 'multi_select':
+      return Array.isArray(value) && value.length === 0;
+    case 'media':
+      if (field.multiple) {
+        return Array.isArray(value) && value.length === 0;
+      }
+      if (value === '') return true;
+      if (value instanceof File) return false;
+      if (typeof value === 'object') {
+        const mediaVal = value as { url?: string; file?: File };
+        return (
+          !mediaVal.url && !(mediaVal.file instanceof File)
+        );
+      }
+      return true;
+    case 'select':
+    case 'radio':
+      return value === '';
+    case 'date':
+      if (field.dateMode === 'range') {
+        if (typeof value !== 'object') return true;
+        const rangeVal = value as { from?: unknown; to?: unknown };
+        return !rangeVal.from && !rangeVal.to;
+      }
+      return value === '';
+    case 'range':
+      if (field.rangeMode === 'range') {
+        return !Array.isArray(value) || value.length === 0;
+      }
+      return value === '';
+    case 'rating':
+    case 'number':
+      return value === '';
+    case 'map':
+      if (typeof value !== 'object') return true;
+      const coords = (value as { coordinates?: unknown }).coordinates;
+      return !Array.isArray(coords) || coords.length === 0;
+    case 'matrix':
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        Object.keys(value).length === 0
+      );
+    default:
+      return value === '';
+  }
+}
+
+function wrapFieldValidation(
+  field: FormField,
+  typeSchema: z.ZodTypeAny,
+  getLabel: () => string,
+): z.ZodTypeAny {
+  return z.any().superRefine((val, ctx) => {
+    if (isEmptyFieldValue(field, val)) {
+      if (field.required) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${getLabel()} is required`,
+        });
+      }
+      return;
+    }
+
+    const parsed = typeSchema.safeParse(val);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: issue.message,
+          path: issue.path,
+        });
+      }
+    }
+  });
+}
+
+/**
  * Reusable password schema for strict validation
  */
 export const passwordValidation = z
@@ -343,9 +428,13 @@ export function buildFieldSchema(
 
     case 'checkbox':
     case 'multi_select':
-      schema = z
-        .array(z.string())
-        .min(1, `${getLabel()} requires at least one selection`);
+      schema = z.array(z.string());
+      if (field.required) {
+        schema = (schema as z.ZodArray<z.ZodString>).min(
+          1,
+          `${getLabel()} requires at least one selection`,
+        );
+      }
       break;
 
     case 'range':
@@ -474,23 +563,29 @@ export function buildFieldSchema(
       });
       break;
 
-    case 'media':
-      // Media: uploaded url and/or deferred local File on the value object
+    case 'media': {
+      const isValidMediaItem = (item: unknown): boolean => {
+        if (!item || typeof item !== 'object') return false;
+        return (
+          Boolean((item as { url?: string }).url) ||
+          (item as { file?: File }).file instanceof File
+        );
+      };
+
       if (field.multiple) {
         schema = z
           .array(z.any())
-          .min(1, `${getLabel()} requires at least one file`)
           .refine(
-            (items) =>
-              items.every(
-                (item) =>
-                  item &&
-                  typeof item === 'object' &&
-                  (Boolean((item as { url?: string }).url) ||
-                    (item as { file?: File }).file instanceof File),
-              ),
-            { message: `${getLabel()} requires at least one file` },
+            (items) => items.every(isValidMediaItem),
+            { message: `${getLabel()} requires valid file uploads` },
           );
+
+        if (field.required) {
+          schema = (schema as z.ZodArray<any>).min(
+            1,
+            `${getLabel()} requires at least one file`,
+          );
+        }
 
         if (field.maxFiles) {
           schema = (schema as z.ZodArray<any>).max(
@@ -501,20 +596,17 @@ export function buildFieldSchema(
       } else {
         schema = z.any().refine(
           (val) => {
-            if (val === null || val === undefined || val === '') return false;
             if (val instanceof File) return true;
-            if (typeof val === 'object') {
-              return (
-                Boolean((val as { url?: string }).url) ||
-                (val as { file?: File }).file instanceof File
-              );
+            if (typeof val === 'object' && val !== null) {
+              return isValidMediaItem(val);
             }
             return false;
           },
-          { message: `${getLabel()} is required` },
+          { message: `${getLabel()} requires a valid file upload` },
         );
       }
       break;
+    }
 
     case 'array':
       // Array/repeating fields - build schema for nested fields recursively
@@ -665,27 +757,7 @@ export function buildFieldSchema(
       schema = z.any();
   }
 
-  // Apply required validation
-  if (field.required) {
-    // Most schemas already handle required, but ensure it's not optional
-    return schema;
-  } else {
-    // Make field optional and handle empty strings
-    if (
-      field.type === 'text' ||
-      field.type === 'nepali_unicode' ||
-      field.type === 'textarea' ||
-      field.type === 'email'
-    ) {
-      return z
-        .union([schema, z.literal('')])
-        .optional()
-        .transform((val) => (val === '' ? undefined : val));
-    } else if (field.type === 'checkbox' || field.type === 'multi_select') {
-      return (schema as z.ZodArray<any>).optional().default([]);
-    }
-    return schema.optional();
-  }
+  return wrapFieldValidation(field, schema, getLabel);
 }
 
 /**
