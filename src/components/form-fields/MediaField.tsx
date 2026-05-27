@@ -62,6 +62,7 @@ function useFileUploader(
   maxSize: number,
   onChange: (val: any) => void,
   uploadMedia: (formData: FormData) => Promise<{ url: string; filename: string }>,
+  deferMediaUpload: boolean,
 ) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -78,6 +79,18 @@ function useFileUploader(
           let preview: string | undefined;
           if (file.type.startsWith('image/'))
             preview = URL.createObjectURL(file);
+
+          if (deferMediaUpload) {
+            newFiles.push({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              preview,
+              file,
+            });
+            continue;
+          }
+
           const formData = new FormData();
           formData.append('file', file);
           try {
@@ -99,7 +112,7 @@ function useFileUploader(
         setUploading(false);
       }
     },
-    [files, multiple, maxSize, onChange, uploadMedia],
+    [files, multiple, maxSize, onChange, uploadMedia, deferMediaUpload],
   );
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -129,6 +142,7 @@ function DropZone({
   multiple,
   acceptedTypes,
   maxSize,
+  deferMediaUpload,
   disabled,
   dragActive,
   uploading,
@@ -140,6 +154,7 @@ function DropZone({
   multiple: boolean;
   acceptedTypes: string[];
   maxSize: number;
+  deferMediaUpload?: boolean;
   disabled?: boolean;
   dragActive: boolean;
   uploading: boolean;
@@ -189,6 +204,7 @@ function DropZone({
           <p className='text-xs text-muted-foreground mt-1'>
             Max size: {formatFileSize(maxSize)}
             {multiple && ' • Multiple files allowed'}
+            {deferMediaUpload && ' • Uploads when you submit the form'}
           </p>
         </div>
       </div>
@@ -301,7 +317,7 @@ function MediaFieldEdit({
   disabled,
   className,
 }: BaseFieldProps) {
-  const { uploadMedia } = useFormKit();
+  const { uploadMedia, deferMediaUpload = true } = useFormKit();
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
 
   const acceptedTypes = field.acceptedTypes || ['image/*', 'application/pdf'];
@@ -314,7 +330,14 @@ function MediaFieldEdit({
       : [];
 
   const { dragActive, uploading, processFiles, handleDrag, handleDrop } =
-    useFileUploader(files, multiple, maxSize, onChange, uploadMedia);
+    useFileUploader(
+      files,
+      multiple,
+      maxSize,
+      onChange,
+      uploadMedia,
+      deferMediaUpload,
+    );
 
   const removeFile = (index: number) => {
     if (multiple) onChange(files.filter((_, i) => i !== index));
@@ -344,6 +367,7 @@ function MediaFieldEdit({
           multiple={multiple}
           acceptedTypes={acceptedTypes}
           maxSize={maxSize}
+          deferMediaUpload={deferMediaUpload}
           disabled={disabled}
           dragActive={dragActive}
           uploading={uploading}
@@ -380,6 +404,7 @@ function MediaFieldEdit({
                   <p className='font-medium text-sm truncate'>{file.name}</p>
                   <p className='text-xs text-muted-foreground'>
                     {formatFileSize(file.size)}
+                    {!file.url && file.file && ' · Will upload on submit'}
                   </p>
                 </div>
                 {/* Actions */}

@@ -10,13 +10,16 @@ import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { useFormKit } from '../../context/FormKitContext';
 import { Button } from '../ui/button';
 import { cn, formatNumberByLocale } from '../../lib/utils';
+import { FormKitRoot } from '../FormKitRoot';
 import { FormFieldRenderer } from '../form-fields/FormFieldRenderer';
 import {
   extractSchemaFields,
   extractSubmissionValues,
   mapDefaultValuesToFieldIds,
 } from '../../lib/submissionUtils';
+import { uploadPendingMediaInValues } from '../../lib/mediaUploadUtils';
 import {
+  applyStepVisibility,
   groupStepSections,
   isMultiStepWizard,
   markFieldsTouched,
@@ -132,6 +135,16 @@ export interface FormRendererProps {
 
   /** When true (default), schemas with 2+ `step_section` fields use wizard navigation. */
   enableMultiStep?: boolean;
+  /**
+   * Hide root-level `step_section` fields by `uniqueIdentifier`.
+   * Example: `{ userinfo_step: true }` hides that step from the wizard and submission UI.
+   */
+  hideSteps?: Record<string, boolean>;
+  /**
+   * When true (default), media files upload on submit instead of on select.
+   * Overrides `FormKitProvider` `deferMediaUpload` when set.
+   */
+  deferMediaUpload?: boolean;
   stepLabels?: FormRendererStepLabels;
   /** Show reset control. Defaults to true in create mode, false in edit mode. */
   showReset?: boolean;
@@ -161,6 +174,8 @@ export function FormRenderer({
   submitLabel: submitLabelProp,
   disabled,
   enableMultiStep = true,
+  hideSteps,
+  deferMediaUpload: deferMediaUploadProp,
   stepLabels,
   showReset: showResetProp,
   savingLabel = 'Saving…',
@@ -169,7 +184,9 @@ export function FormRenderer({
   onSubmitSuccess,
   onSubmitError,
 }: FormRendererProps): React.ReactElement {
-  const { locale } = useFormKit();
+  const { locale, uploadMedia, deferMediaUpload: deferMediaUploadContext = true } =
+    useFormKit();
+  const deferMediaUpload = deferMediaUploadProp ?? deferMediaUploadContext;
 
   const effectiveMode = modeProp ?? (submission != null ? 'edit' : 'create');
   const submitLabel =
@@ -177,7 +194,11 @@ export function FormRenderer({
   const showReset = showResetProp ?? effectiveMode === 'create';
 
   const rawFields = useMemo(() => extractSchemaFields(form), [form]);
-  const fields = useLocalizedFields(rawFields);
+  const localizedFields = useLocalizedFields(rawFields);
+  const fields = useMemo(
+    () => applyStepVisibility(localizedFields, hideSteps),
+    [localizedFields, hideSteps],
+  );
 
   const derivedInitialValues = useMemo((): Values => {
     if (submission != null) {
@@ -472,13 +493,14 @@ export function FormRenderer({
   );
 
   const persistSubmission = useCallback(async () => {
-    const cleaned = cleanSubmissionData(valuesRef.current, fields);
-    const validation = validateFormWithZod(fields, cleaned, locale);
+    const rawValues = valuesRef.current;
+    const preUploadCleaned = cleanSubmissionData(rawValues, fields);
+    const validation = validateFormWithZod(fields, preUploadCleaned, locale);
     setValidationErrors(validation.errors || {});
 
     if (!validation.isValid) {
       const nextTouched: Record<string, boolean> = {};
-      collectVisibleFields(fields, valuesRef.current).forEach((f) => {
+      collectVisibleFields(fields, rawValues).forEach((f) => {
         nextTouched[f.id] = true;
       });
       setTouched(nextTouched);
@@ -500,6 +522,18 @@ export function FormRenderer({
       throw new Error('Validation failed');
     }
 
+    let valuesToSubmit = rawValues;
+    if (deferMediaUpload) {
+      valuesToSubmit = await uploadPendingMediaInValues(
+        valuesToSubmit,
+        fields,
+        uploadMedia,
+      );
+      valuesRef.current = valuesToSubmit;
+      setValues(valuesToSubmit);
+    }
+
+    const cleaned = cleanSubmissionData(valuesToSubmit, fields);
     return onSubmit(cleaned);
   }, [
     fields,
@@ -508,6 +542,8 @@ export function FormRenderer({
     useWizard,
     activeStepGroup,
     currentStepIndex,
+    deferMediaUpload,
+    uploadMedia,
   ]);
 
   const handleSubmit = useCallback(
@@ -641,6 +677,7 @@ export function FormRenderer({
   };
 
   return (
+    <FormKitRoot>
     <form onSubmit={handleSubmit} className={cn('space-y-6', className)}>
       {fields.length === 0 ? (
         <p className='text-center py-8 text-muted-foreground'>No fields to display.</p>
@@ -672,5 +709,6 @@ export function FormRenderer({
         <p className='text-sm text-destructive'>{submitError}</p>
       )}
     </form>
+    </FormKitRoot>
   );
 }

@@ -39,8 +39,10 @@ export function TextareaField({
         disabled={disabled}
         className={cn(
           'resize-y transition-all h-fit duration-200',
-          'focus-visible:ring-2 focus-visible:ring-primary focus:border-none',
-          showError && 'border-red-500 focus-visible:ring-red-500',
+          // `Textarea` already styles focus state with `border-primary`; don't
+          // hide it with `focus-visible:border-none`.
+          showError &&
+            'border-red-500 focus-visible:ring-red-500 focus:border-red-500',
         )}
       />
     </FieldWrapper>

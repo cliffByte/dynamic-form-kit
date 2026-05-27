@@ -475,11 +475,22 @@ export function buildFieldSchema(
       break;
 
     case 'media':
-      // Media upload - can be File, FileList, or array of files
+      // Media: uploaded url and/or deferred local File on the value object
       if (field.multiple) {
         schema = z
           .array(z.any())
-          .min(1, `${getLabel()} requires at least one file`);
+          .min(1, `${getLabel()} requires at least one file`)
+          .refine(
+            (items) =>
+              items.every(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  (Boolean((item as { url?: string }).url) ||
+                    (item as { file?: File }).file instanceof File),
+              ),
+            { message: `${getLabel()} requires at least one file` },
+          );
 
         if (field.maxFiles) {
           schema = (schema as z.ZodArray<any>).max(
@@ -488,11 +499,20 @@ export function buildFieldSchema(
           );
         }
       } else {
-        schema = z
-          .any()
-          .refine((val) => val !== null && val !== undefined && val !== '', {
-            message: `${getLabel()} is required`,
-          });
+        schema = z.any().refine(
+          (val) => {
+            if (val === null || val === undefined || val === '') return false;
+            if (val instanceof File) return true;
+            if (typeof val === 'object') {
+              return (
+                Boolean((val as { url?: string }).url) ||
+                (val as { file?: File }).file instanceof File
+              );
+            }
+            return false;
+          },
+          { message: `${getLabel()} is required` },
+        );
       }
       break;
 

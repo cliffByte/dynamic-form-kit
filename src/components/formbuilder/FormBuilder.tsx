@@ -10,6 +10,7 @@ import { FormField } from '../../types/form';
 import { EnhancedFormSubmission } from '../../types/submission';
 import { TemplateSelector } from './features/field-palette/TemplateSelector';
 import { FieldPalette } from './features/field-palette/FieldPalette';
+import { FormKitRoot } from '../FormKitRoot';
 import { FormCanvas } from '../FormCanvas';
 import {
   useFormBuilderStore,
@@ -327,6 +328,7 @@ export const FormBuilder = React.memo(function FormBuilder({
   // }
 
   return (
+    <FormKitRoot>
     <DndProvider backend={HTML5Backend}>
       <div className='flex flex-col gap-4 h-[calc(100vh-150px)]'>
         {/* Main Grid */}
@@ -363,5 +365,6 @@ export const FormBuilder = React.memo(function FormBuilder({
         enhancedSubmission={enhancedSubmission}
       />
     </DndProvider>
+    </FormKitRoot>
   );
 });

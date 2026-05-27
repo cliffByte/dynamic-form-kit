@@ -1,6 +1,8 @@
 'use client';
 
+import '../form-kit-styles';
 import React, { createContext, useContext, type ReactNode } from 'react';
+import { FormKitRoot } from '../components/FormKitRoot';
 import type { FormField, FormTemplate } from '../types/form';
 import type { FormKitClient } from '../lib/client/createFormKitClient';
 import { resolveFormKitLocale } from '../lib/locales';
@@ -26,6 +28,11 @@ export interface FormKitContextValue {
     schema: FormField;
   }) => Promise<void>;
   uploadMedia: (formData: FormData) => Promise<FormKitMediaUploadResult>;
+  /**
+   * When true (default), media fields keep files local until form submit.
+   * Set false to upload immediately on file select (legacy behaviour).
+   */
+  deferMediaUpload?: boolean;
 
   // Runtime CRUD (delegates to client by default)
   getForm: (formId: string) => Promise<any>;
@@ -54,6 +61,7 @@ const defaultContext: FormKitContextValue = {
   uploadMedia: async () => {
     throw new Error('FormKit: uploadMedia is not configured');
   },
+  deferMediaUpload: true,
   getForm: async () => {
     throw new Error('FormKit: client is not configured (getForm)');
   },
@@ -99,7 +107,7 @@ export function FormKitProvider({
 
   return (
     <FormKitContext.Provider value={merged}>
-      {children}
+      <FormKitRoot>{children}</FormKitRoot>
     </FormKitContext.Provider>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import '../map-field-styles';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   MapContainer,
@@ -12,7 +13,6 @@ import {
   Marker,
 } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 // Fix for default marker icons in Leaflet with Next.js
 // Only run on client side to avoid SSR issues
@@ -473,14 +473,14 @@ export function MapField({
       </div>
       <div
         id={containerIdRef.current}
-        className='border border-gray-300 rounded-md overflow-hidden relative'>
+        className='form-kit-map h-[400px] w-full border border-border rounded-md overflow-hidden relative'>
         <MapContainer
           key={containerIdRef.current}
           center={center}
           zoom={zoom}
           minZoom={minZoom}
           maxZoom={maxZoom}
-          style={{ height: '400px', width: '100%' }}
+          style={{ height: '100%', width: '100%', minHeight: '300px' }}
           ref={(map) => {
             if (map) {
               mapRef.current = map;

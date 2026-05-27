@@ -35,12 +35,12 @@ export const SectionField = React.memo(function SectionField({
   return (
     <div
       className={cn(
-        'rounded-md border bg-card overflow-visible transition-all duration-200',
+        'rounded-md border border-border bg-card shadow-sm overflow-visible transition-all duration-200',
         'hover:shadow-sm',
         className,
       )}>
       {/* Section header */}
-      <div className='border-b bg-muted/30 px-4 py-4'>
+      <div className='border-b border-border bg-muted/30 px-4 py-4'>
         <div className='flex items-center gap-3'>
           {/* Step number badge */}
           {isStepSection && field.stepNumber && (

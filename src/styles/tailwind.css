@@ -1,0 +1,9 @@
+/**
+ * Host integration for Tailwind v4 + shadcn apps.
+ * Add to globals.css (after tailwindcss):
+ *   @import "@dynamic-core/form-kit/tailwind.css";
+ */
+@import './components.css';
+@import './map.css';
+
+@source "../**/*.{js,ts,jsx,tsx}";

@@ -5,6 +5,7 @@ import type { FormField } from '../../types/form';
 import { shouldShowField } from '../../lib/formUtils';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
 import { cn } from '../../lib/utils';
+import { FormKitRoot } from '../FormKitRoot';
 import { DisplayFieldRenderer } from '../display-fields/DisplayFieldRenderer';
 import {
   extractSchemaFields,
@@ -210,12 +211,14 @@ export function SubmissionViewer({
   );
 
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className={cn('grid gap-4', fieldsClassName)}>
-        {fields.map((field) => (
-          <div key={field.id}>{renderField(field)}</div>
-        ))}
+    <FormKitRoot>
+      <div className={cn('space-y-4', className)}>
+        <div className={cn('grid gap-4', fieldsClassName)}>
+          {fields.map((field) => (
+            <div key={field.id}>{renderField(field)}</div>
+          ))}
+        </div>
       </div>
-    </div>
+    </FormKitRoot>
   );
 }

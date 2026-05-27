@@ -1,0 +1,72 @@
+/**
+ * Scoped form-kit component styles (PhoneInput). Imported by tailwind.css for hosts.
+ */
+@layer components {
+  .form-kit-root .PhoneInput {
+    --PhoneInputCountryFlag-height: 1em;
+    --PhoneInputCountryFlag-borderColor: transparent;
+    /* v4 hosts provide --color-* (real colors via @theme inline). v3 hosts
+       only provide --muted-foreground as HSL components, so wrap in hsl(). */
+    --PhoneInputCountrySelectArrow-color: var(
+      --color-muted-foreground,
+      hsl(var(--muted-foreground))
+    );
+    --PhoneInputCountrySelectArrow-opacity: 0.6;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputInput {
+    @apply flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputInput::placeholder {
+    @apply text-muted-foreground;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountry {
+    position: relative;
+    align-self: stretch;
+    @apply flex items-center mr-2 pr-2 border-r border-border;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountryIcon {
+    @apply w-5 h-auto rounded-sm overflow-hidden;
+    box-shadow: 0 0 0 1px var(--color-border, hsl(var(--border)));
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountryIcon--border {
+    box-shadow: none;
+    background-color: transparent;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountryIconImg {
+    @apply block w-full h-auto;
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountrySelect {
+    @apply absolute top-0 left-0 h-full w-full z-10 border-0 opacity-0 cursor-pointer;
+  }
+
+  .form-kit-root
+    .PhoneInput
+    .PhoneInputCountrySelect:focus
+    + .PhoneInputCountryIcon {
+    box-shadow: 0 0 0 2px var(--color-ring, hsl(var(--ring)));
+  }
+
+  .form-kit-root .PhoneInput .PhoneInputCountrySelectArrow {
+    @apply block ml-1;
+    width: 0.35em;
+    height: 0.35em;
+    border-style: solid;
+    border-color: var(
+      --color-muted-foreground,
+      hsl(var(--muted-foreground))
+    );
+    border-top-width: 0;
+    border-bottom-width: 1px;
+    border-left-width: 0;
+    border-right-width: 1px;
+    transform: rotate(45deg);
+    opacity: 0.6;
+  }
+}

@@ -2,7 +2,6 @@
 
 import React from 'react';
 import PhoneInput from 'react-phone-number-input';
-import 'react-phone-number-input/style.css';
 import { FieldWrapper } from './FieldWrapper';
 import { BaseFieldProps } from './types';
 import { cn } from '../../lib/utils';
@@ -40,9 +39,11 @@ export function PhoneField({
         disabled={disabled}
         className={cn(
           'flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors',
-          'focus-within:outline-none focus-within:ring-2 focus-within:ring-primary focus-within:border-none',
+          // Don't hide border on focus-within; keep it primary.
+          'focus-within:outline-none focus-within:ring-2 focus-within:ring-primary focus-within:border-primary',
           'md:text-sm',
-          showError && 'border-destructive focus-within:ring-destructive',
+          showError &&
+            'border-destructive focus-within:ring-destructive focus-within:border-destructive',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
       />

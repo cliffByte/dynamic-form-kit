@@ -1,9 +1,9 @@
 'use client';
 
+import '../map-field-styles';
 import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 // Fix for default marker icons in Leaflet (client-only)
 if (typeof window !== 'undefined') {
   delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -118,12 +118,12 @@ export function MapCenterPicker({
   return (
     <div
       id={containerIdRef.current}
-      className='border border-gray-300 rounded-md overflow-hidden'>
+      className='form-kit-map h-[300px] w-full border border-border rounded-md overflow-hidden relative'>
       <MapContainer
         key={containerIdRef.current}
         center={currentCenter}
         zoom={13}
-        style={{ height: '300px', width: '100%' }}
+        style={{ height: '100%', width: '100%', minHeight: '300px' }}
         ref={(map) => {
           if (map) {
             mapRef.current = map;

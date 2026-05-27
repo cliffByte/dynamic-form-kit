@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils';
 import { isTodayConstraint, resolveDateConstraint } from '../../lib/dateConstraint';
 import { useFormKit } from '../../context/FormKitContext';
 import {
+  coerceDateStorageValue,
   formatNepaliDateDisplay,
   parseStoredDateValue,
 } from '../../lib/nepaliCalendar';
@@ -142,8 +143,8 @@ export function DateField({
             placeholder={nepaliPlaceholder}
             minDate={dateMin}
             maxDate={dateMax}
-            value={typeof value === 'string' ? value : undefined}
-            onChange={(iso) => onChange(iso)}
+            value={coerceDateStorageValue(value, true)}
+            onChange={(storageValue) => onChange(storageValue)}
             onBlur={onBlur}
           />
         )

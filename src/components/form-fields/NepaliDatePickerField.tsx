@@ -1,28 +1,86 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import NepaliDatePicker from '@zener/nepali-datepicker-react';
 import NepaliDate from '@zener/nepali-date';
 import '@zener/nepali-datepicker-react/index.css';
 import { cn } from '../../lib/utils';
 import {
+  NEPALI_DATE_STORAGE_FORMAT,
   adDateToNepaliDate,
-  storageValueToNepaliDate,
   nepaliDateToStorageValue,
+  toNepaliPickerValue,
 } from '../../lib/nepaliCalendar';
 
 const INPUT_CLASS =
   'zener-w-full zener-h-10 zener-rounded-md zener-border zener-border-input zener-bg-background zener-px-3 zener-py-2 zener-text-sm';
 
-type NepaliDatePickerFieldProps = {
-  id?: string;
+const PICKER_FORMAT = NEPALI_DATE_STORAGE_FORMAT;
+
+type NepaliPickerCommonProps = {
   disabled?: boolean;
   placeholder?: string;
-  value?: string;
   minDate?: Date;
   maxDate?: Date;
   showError?: boolean;
-  onChange: (iso: string) => void;
+};
+
+function nepaliPickerClassName(showError?: boolean) {
+  return () => ({
+    default: cn(INPUT_CLASS, showError && 'zener-border-red-500'),
+    focus: cn(INPUT_CLASS, 'zener-ring-2 zener-ring-ring'),
+    disabled: cn(INPUT_CLASS, 'zener-opacity-50'),
+  });
+}
+
+function NepaliPickerPlaceholder({
+  placeholder,
+  disabled,
+  showError,
+}: {
+  placeholder?: string;
+  disabled?: boolean;
+  showError?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        INPUT_CLASS,
+        'flex items-center text-muted-foreground',
+        disabled && 'opacity-50',
+        showError && 'border-red-500',
+      )}
+      aria-hidden>
+      {placeholder || 'मिति छान्नुहोस्'}
+    </div>
+  );
+}
+
+function ClientNepaliDatePicker(
+  props: React.ComponentProps<typeof NepaliDatePicker>,
+) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <NepaliPickerPlaceholder
+        placeholder={props.placeholder}
+        disabled={props.disabled}
+      />
+    );
+  }
+
+  return <NepaliDatePicker {...props} />;
+}
+
+type NepaliDatePickerFieldProps = NepaliPickerCommonProps & {
+  id?: string;
+  value?: string;
+  onChange: (storageValue: string) => void;
   onBlur?: () => void;
 };
 
@@ -37,40 +95,37 @@ export function NepaliDatePickerField({
   onChange,
   onBlur,
 }: NepaliDatePickerFieldProps) {
-  const pickerValue = storageValueToNepaliDate(value);
+  const pickerValue = toNepaliPickerValue(value);
 
   return (
-    <NepaliDatePicker
-      type='BS'
-      lang='np'
-      disabled={disabled}
-      placeholder={placeholder}
-      value={pickerValue ?? undefined}
-      min={minDate ? adDateToNepaliDate(minDate) : undefined}
-      max={maxDate ? adDateToNepaliDate(maxDate) : undefined}
-      showclear
-      portalClassName='z-[200]'
-      className={() => ({
-        default: cn(INPUT_CLASS, showError && 'zener-border-red-500'),
-        focus: cn(INPUT_CLASS, 'zener-ring-2 zener-ring-ring'),
-        disabled: cn(INPUT_CLASS, 'zener-opacity-50'),
-      })}
-      onChange={(date: NepaliDate | null) => {
-        onChange(nepaliDateToStorageValue(date));
-        if (date) onBlur?.();
-      }}
-    />
+    <div id={id}>
+      <ClientNepaliDatePicker
+        type='BS'
+        lang='np'
+        format={PICKER_FORMAT}
+        disabled={disabled}
+        placeholder={placeholder}
+        value={pickerValue}
+        min={minDate ? adDateToNepaliDate(minDate) : undefined}
+        max={maxDate ? adDateToNepaliDate(maxDate) : undefined}
+        showclear
+        portalClassName='z-[200]'
+        className={nepaliPickerClassName(showError)}
+        onChange={(date) => {
+          const nepali =
+            date instanceof NepaliDate ? date : date ? new NepaliDate(date) : null;
+          onChange(nepaliDateToStorageValue(nepali));
+          if (nepali) onBlur?.();
+        }}
+      />
+    </div>
   );
 }
 
-type NepaliDateRangePickerFieldProps = {
-  disabled?: boolean;
+type NepaliDateRangePickerFieldProps = NepaliPickerCommonProps & {
   startPlaceholder?: string;
   endPlaceholder?: string;
   value?: { from?: string; to?: string };
-  minDate?: Date;
-  maxDate?: Date;
-  showError?: boolean;
   onChange: (range: { from: string; to: string }) => void;
   onBlur?: () => void;
 };
@@ -86,59 +141,54 @@ export function NepaliDateRangePickerField({
   onChange,
   onBlur,
 }: NepaliDateRangePickerFieldProps) {
-  const startValue = value?.from ? storageValueToNepaliDate(value.from) : null;
-  const endValue = value?.to ? storageValueToNepaliDate(value.to) : null;
+  const startValue = toNepaliPickerValue(value?.from);
+  const endValue = toNepaliPickerValue(value?.to);
 
-  const handleStart = (date: NepaliDate | null) => {
+  const toNepali = (date: NepaliDate | Date | null) => {
+    if (!date) return null;
+    return date instanceof NepaliDate ? date : new NepaliDate(date);
+  };
+
+  const handleStart = (date: NepaliDate | Date | null) => {
     onChange({
-      from: nepaliDateToStorageValue(date),
+      from: nepaliDateToStorageValue(toNepali(date)),
       to: value?.to || '',
     });
   };
 
-  const handleEnd = (date: NepaliDate | null) => {
+  const handleEnd = (date: NepaliDate | Date | null) => {
     const next = {
       from: value?.from || '',
-      to: nepaliDateToStorageValue(date),
+      to: nepaliDateToStorageValue(toNepali(date)),
     };
     onChange(next);
     if (next.from && next.to) onBlur?.();
   };
 
+  const pickerProps = {
+    type: 'BS' as const,
+    lang: 'np' as const,
+    format: PICKER_FORMAT,
+    disabled,
+    min: minDate ? adDateToNepaliDate(minDate) : undefined,
+    max: maxDate ? adDateToNepaliDate(maxDate) : undefined,
+    showclear: true,
+    portalClassName: 'z-[200]',
+    className: nepaliPickerClassName(showError),
+  };
+
   return (
     <div className='grid gap-2 sm:grid-cols-2'>
-      <NepaliDatePicker
-        type='BS'
-        lang='np'
-        disabled={disabled}
+      <ClientNepaliDatePicker
+        {...pickerProps}
         placeholder={startPlaceholder}
-        value={startValue ?? undefined}
-        min={minDate ? adDateToNepaliDate(minDate) : undefined}
-        max={maxDate ? adDateToNepaliDate(maxDate) : undefined}
-        showclear
-        portalClassName='z-[200]'
-        className={() => ({
-          default: cn(INPUT_CLASS, showError && 'zener-border-red-500'),
-          focus: cn(INPUT_CLASS, 'zener-ring-2 zener-ring-ring'),
-          disabled: cn(INPUT_CLASS, 'zener-opacity-50'),
-        })}
+        value={startValue}
         onChange={handleStart}
       />
-      <NepaliDatePicker
-        type='BS'
-        lang='np'
-        disabled={disabled}
+      <ClientNepaliDatePicker
+        {...pickerProps}
         placeholder={endPlaceholder}
-        value={endValue ?? undefined}
-        min={minDate ? adDateToNepaliDate(minDate) : undefined}
-        max={maxDate ? adDateToNepaliDate(maxDate) : undefined}
-        showclear
-        portalClassName='z-[200]'
-        className={() => ({
-          default: cn(INPUT_CLASS, showError && 'zener-border-red-500'),
-          focus: cn(INPUT_CLASS, 'zener-ring-2 zener-ring-ring'),
-          disabled: cn(INPUT_CLASS, 'zener-opacity-50'),
-        })}
+        value={endValue}
         onChange={handleEnd}
       />
     </div>

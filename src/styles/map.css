@@ -1,0 +1,52 @@
+/**
+ * Leaflet / react-leaflet fixes for Tailwind + shadcn hosts.
+ * Imported from MapField and MapCenterPicker (and form-kit-styles).
+ */
+
+.form-kit-map {
+  position: relative;
+  width: 100%;
+  min-height: 300px;
+  isolation: isolate;
+}
+
+.form-kit-map .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: inherit;
+  z-index: 0;
+  background: var(--color-muted, var(--muted, #e5e7eb));
+}
+
+.form-kit-map .leaflet-tile,
+.form-kit-map .leaflet-marker-icon,
+.form-kit-map .leaflet-marker-shadow,
+.form-kit-map .leaflet-container img,
+.form-kit-map .leaflet-container .leaflet-tile-pane img,
+.form-kit-map .leaflet-container .leaflet-marker-pane img {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.form-kit-map .leaflet-container .leaflet-overlay-pane svg {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.form-kit-map .custom-pin-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.form-kit-map .leaflet-control {
+  z-index: 1;
+}
+
+.form-kit-map .leaflet-pane {
+  z-index: auto;
+}
+
+.form-kit-map .leaflet-top,
+.form-kit-map .leaflet-bottom {
+  z-index: 2;
+}

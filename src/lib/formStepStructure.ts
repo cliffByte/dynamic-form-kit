@@ -13,7 +13,37 @@ export interface FormStructure {
 }
 
 /**
+ * Merges static `isHidden` on step sections with a host-provided map keyed by
+ * `uniqueIdentifier`. Returns a shallow-cloned field list (schema is not mutated).
+ */
+export function applyStepVisibility(
+  fields: FormField[],
+  hideSteps?: Record<string, boolean>,
+): FormField[] {
+  if (!hideSteps || Object.keys(hideSteps).length === 0) {
+    return fields;
+  }
+
+  return fields.map((field) => {
+    if (field.type !== 'step_section') {
+      return field;
+    }
+
+    const stepKey = field.uniqueIdentifier?.trim();
+    const hideFromMap = stepKey ? hideSteps[stepKey] === true : false;
+    const shouldHide = field.isHidden === true || hideFromMap;
+
+    if (!shouldHide) {
+      return field;
+    }
+
+    return { ...field, isHidden: true };
+  });
+}
+
+/**
  * Groups consecutive `step_section` fields and collects other root fields separately.
+ * Step sections with `isHidden: true` are omitted from wizard groups.
  */
 export function groupStepSections(fields: FormField[]): FormStructure {
   const stepGroups: StepGroup[] = [];
@@ -24,6 +54,10 @@ export function groupStepSections(fields: FormField[]): FormStructure {
 
   fields.forEach((field, index) => {
     if (field.type === 'step_section') {
+      if (field.isHidden) {
+        return;
+      }
+
       if (currentGroup === null) {
         currentGroup = [field];
         groupStartIndex = index;

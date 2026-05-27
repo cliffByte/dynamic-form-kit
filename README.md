@@ -43,7 +43,7 @@ pnpm add @dynamic-core/form-kit
 Use this order in a new app:
 
 1. Install the package (above).  
-2. Import **`@dynamic-core/form-kit/styles.css`** once in your app entry or root layout.  
+2. Add `@import "@dynamic-core/form-kit/tailwind.css"` to globals (see **§1 Styles**).  
 3. Wrap your app (or the routes that use forms) in **`FormKitProvider`**.  
 4. Configure **locale**, **`t()`** for labels, and **API methods** (client and/or your own functions).  
 5. Render **`FormRenderer`** / **`SubmissionViewer`** / **`SubmissionEditor`** with **`form`** and **`submission`** objects loaded by **your** data layer.  
@@ -56,28 +56,43 @@ Runtime components **never fetch by ID themselves**. Your app loads data, then p
 
 ## 1. Styles
 
-Import the compiled stylesheet **once**:
+Form-kit uses your app’s **existing shadcn theme** (`:root` CSS variables such as `--background`, `--primary`, etc.). It does **not** reset `body` or redefine `:root` when integrated correctly.
+
+### A. Host app uses Tailwind + shadcn (recommended)
+
+**Do not** import `@dynamic-core/form-kit/styles.css` — that duplicates Tailwind utilities and can clash with your app.
+
+Add to your global CSS (after `@import "tailwindcss"`):
+
+```css
+@import "tailwindcss";
+@import "@dynamic-core/form-kit/tailwind.css";
+@import "tw-animate-css";
+```
+
+`tailwind.css` scans form-kit sources (`@source`) and includes PhoneInput + map styles. Use PostCSS with `@tailwindcss/postcss` in the host app.
+
+Wrap your app in **`FormKitProvider`** at the root (see §2). It loads third-party field CSS (phone, leaflet, nepali datepicker) automatically and wraps children in **`FormKitRoot`**.
+
+### B. Standalone app (no Tailwind in the host)
 
 ```ts
-// e.g. main.tsx, App.tsx, or app/layout.tsx
 import '@dynamic-core/form-kit/styles.css';
+import '@dynamic-core/form-kit/theme.css'; // only if the host has no shadcn :root theme
 ```
 
-You do **not** need Tailwind in your project for form-kit to work.
+Wrap routes in **`FormKitProvider`**.
 
-If your app **does** use Tailwind and you want to purge/scan classes inside the package:
+### Exports
 
-```js
-// tailwind.config.js
-module.exports = {
-  content: [
-    './src/**/*.{js,ts,jsx,tsx}',
-    './node_modules/@dynamic-core/form-kit/src/**/*.{js,ts,jsx,tsx}',
-  ],
-};
-```
+| File | Purpose |
+|------|---------|
+| `@dynamic-core/form-kit/tailwind.css` | Host integration — `@source` scan + PhoneInput + map |
+| `@dynamic-core/form-kit/styles.css` | Prebuilt utilities for non-Tailwind apps only |
+| `@dynamic-core/form-kit/theme.css` | Optional `:root` / `.dark` tokens for standalone apps |
+| `@dynamic-core/form-kit/map.css` | Leaflet fixes (included via `tailwind.css`) |
 
-If controls look unstyled, confirm the CSS import is loaded on the same page as the form components.
+If controls look unstyled, confirm `tailwind.css` is imported in globals and **`FormKitProvider`** wraps the route.
 
 ---
 
@@ -91,7 +106,9 @@ All builder and runtime components expect context from **`FormKitProvider`**.
 'use client';
 
 import { FormKitProvider } from '@dynamic-core/form-kit';
-import '@dynamic-core/form-kit/styles.css';
+// Standalone only:
+// import '@dynamic-core/form-kit/styles.css';
+// import '@dynamic-core/form-kit/theme.css';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -403,7 +420,9 @@ If you use **Turbopack** in a monorepo, set `turbopack.root` to your workspace r
 
 ```tsx
 // main.tsx
+// Standalone only:
 import '@dynamic-core/form-kit/styles.css';
+import '@dynamic-core/form-kit/theme.css';
 import { FormKitProvider } from '@dynamic-core/form-kit';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -481,7 +500,7 @@ Full schema: **`FormField`** in published types (`dist/index.d.ts`).
 
 | Problem | What to check |
 |---------|----------------|
-| Unstyled inputs/buttons | `import '@dynamic-core/form-kit/styles.css'` loaded? |
+| Unstyled inputs/buttons | `@import "@dynamic-core/form-kit/tailwind.css"` in globals? `FormKitProvider` at app root? |
 | “FormKit: client is not configured” | `FormKitProvider` missing or `getForm` / `createSubmission` not implemented |
 | Changes after npm link / local path | Rebuild package (`npm run build` in form-kit) and reinstall in the app; runtime uses **`dist/`** |
 | Next.js compile errors | `transpilePackages: ['@dynamic-core/form-kit']` |

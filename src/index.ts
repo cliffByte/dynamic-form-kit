@@ -6,6 +6,12 @@ export {
   type FormKitProviderProps,
 } from './context/FormKitContext';
 
+export {
+  FormKitRoot,
+  FORM_KIT_ROOT_CLASS,
+  type FormKitRootProps,
+} from './components/FormKitRoot';
+
 export { FormBuilder } from './components/formbuilder/FormBuilder';
 export {
   useFormBuilderStore,
@@ -71,6 +77,12 @@ export {
 } from './lib/submissionUtils';
 
 export {
+  uploadPendingMediaInValues,
+  mediaValueIsComplete,
+} from './lib/mediaUploadUtils';
+
+export {
+  applyStepVisibility,
   groupStepSections,
   isMultiStepWizard,
   markFieldsTouched,

@@ -50,8 +50,10 @@ export function NumberField({
         disabled={disabled}
         className={cn(
           'transition-all duration-200',
-          'focus-visible:ring-2  focus-visible:ring-primary focus:border-none',
-          showError && 'border-red-500 focus-visible:ring-red-500',
+          // `Input` already styles focus state with `border-primary`; this
+          // component should not override it with `focus:border-none`.
+          showError &&
+            'border-red-500 focus-visible:ring-red-500 focus:border-red-500',
         )}
       />
       {/* Show min/max hint if configured */}

@@ -114,13 +114,47 @@ export function storageValueToNepaliDate(
   if (!trimmed) return null;
 
   const ad = parseNepaliDateStorageValue(trimmed);
-  if (ad) return new NepaliDate(ad);
-
-  try {
-    return new NepaliDate(trimmed);
-  } catch {
-    return null;
+  if (ad) {
+    try {
+      return new NepaliDate(ad);
+    } catch {
+      return null;
+    }
   }
+
+  return null;
+}
+
+/** Safe value for @zener/nepali-datepicker-react (expects NepaliDate, not BS strings). */
+export function toNepaliPickerValue(
+  value: string | undefined,
+): NepaliDate | undefined {
+  const parsed = storageValueToNepaliDate(value);
+  if (!parsed) return undefined;
+  try {
+    parsed.format(NEPALI_DATE_STORAGE_FORMAT, 'np');
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Normalize form values (string, Date, ISO) for the Nepali picker storage format. */
+export function coerceDateStorageValue(
+  raw: unknown,
+  useNepaliCalendar: boolean,
+): string | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    return trimmed || undefined;
+  }
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return useNepaliCalendar
+      ? nepaliDateToStorageValue(new NepaliDate(raw))
+      : raw.toISOString();
+  }
+  return undefined;
 }
 
 /** @deprecated Use storageValueToNepaliDate */
