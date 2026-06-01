@@ -1,5 +1,5 @@
 import type { FormField } from '../types/form';
-import { flattenFields } from './formUtils';
+import { flattenFields, getChoiceFieldValue } from './formUtils';
 
 export type FormKitValues = Record<string, any>;
 
@@ -44,6 +44,54 @@ export function mapDefaultValuesToFieldIds(
  * - `{ data: Record<string, any> }` (already mapped)
  * - `{ values: Record<string, any> }` (client-side storage)
  */
+/**
+ * Flattens saved nested-option submission data into runtime form state:
+ * parent choice at `fieldId`, nested answers at top-level field ids.
+ */
+export function expandNestedOptionSubmission(
+  fields: FormField[],
+  data: FormKitValues,
+): FormKitValues {
+  const out: FormKitValues = { ...data };
+
+  function walk(fieldList: FormField[]) {
+    for (const field of fieldList) {
+      if (field.type === 'step_section' || field.type === 'ui_section') {
+        if (field.fields?.length) walk(field.fields);
+        continue;
+      }
+      if (field.type === 'array' || field.type === 'table') {
+        if (field.fields?.length) walk(field.fields);
+      }
+
+      const optionsWithNested =
+        field.optionConfigs?.filter((o) => o.nestedForm?.fields?.length) ?? [];
+      if (optionsWithNested.length === 0) continue;
+
+      const raw = out[field.id];
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+
+      const selection = getChoiceFieldValue(raw);
+      if (selection !== undefined) {
+        out[field.id] = selection;
+      }
+
+      for (const opt of optionsWithNested) {
+        const branch = (raw as FormKitValues)[opt.value];
+        if (branch && typeof branch === 'object' && !Array.isArray(branch)) {
+          Object.assign(
+            out,
+            expandNestedOptionSubmission(opt.nestedForm!.fields, branch),
+          );
+        }
+      }
+    }
+  }
+
+  walk(fields);
+  return out;
+}
+
 export function extractSubmissionValues(submission: any): FormKitValues {
   const data = submission?.data ?? submission?.values ?? submission?.submissionData;
   if (!data) return {};

@@ -173,18 +173,9 @@ function initializeSubmissionData(
       }
     }
 
-    // Initialize nested form fields inside option configs
-    if (field.optionConfigs && field.optionConfigs.length > 0) {
-      field.optionConfigs.forEach((opt) => {
-        if (opt.nestedForm && opt.nestedForm.fields) {
-          // Nested form fields are currently handled at the same level as parent
-          Object.assign(
-            submissionData,
-            initializeSubmissionData(opt.nestedForm.fields, isInsideArray),
-          );
-        }
-      });
-    }
+    // Nested option fields are stored under the parent choice at submit time
+    // (see cleanSubmissionData), not flattened here — avoids defaults leaking
+    // when the parent option is not selected.
   });
 
   return submissionData;
@@ -554,9 +545,83 @@ export function getTopLevelFieldIds(fields: FormField[]): Set<string> {
   return topLevelIds;
 }
 
+/** Stored on choice fields with per-option nested forms (see cleanSubmissionData). */
+export const NESTED_OPTION_SELECTION_KEY = '__selection';
+
+/** Resolves the user's choice when the saved value is a nested option map. */
+export function getChoiceFieldValue(value: unknown): unknown {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    NESTED_OPTION_SELECTION_KEY in (value as object)
+  ) {
+    return (value as Record<string, unknown>)[NESTED_OPTION_SELECTION_KEY];
+  }
+  return value;
+}
+
+/** Field ids that live inside an option's nested form (not top-level submission keys). */
+export function getOptionNestedFieldIds(schemaFields: FormField[]): Set<string> {
+  const ids = new Set<string>();
+
+  function collectFromNested(fieldList: FormField[]) {
+    for (const field of fieldList) {
+      if (field.type === 'step_section' || field.type === 'ui_section') {
+        if (field.fields?.length) collectFromNested(field.fields);
+      } else if (field.type === 'array' || field.type === 'table') {
+        if (field.fields?.length) collectFromNested(field.fields);
+      } else if (field.type !== 'rich_text') {
+        ids.add(field.id);
+      }
+    }
+  }
+
+  function walk(fieldList: FormField[]) {
+    for (const field of fieldList) {
+      if (field.type === 'step_section' || field.type === 'ui_section') {
+        if (field.fields?.length) walk(field.fields);
+      } else if (field.type === 'array' || field.type === 'table') {
+        if (field.fields?.length) walk(field.fields);
+      }
+      if (field.optionConfigs?.length) {
+        for (const opt of field.optionConfigs) {
+          if (opt.nestedForm?.fields?.length) {
+            collectFromNested(opt.nestedForm.fields);
+          }
+        }
+      }
+    }
+  }
+
+  walk(schemaFields);
+  return ids;
+}
+
+/** Submission object with every nested field set to null (unselected option branch). */
+export function buildNullNestedSubmissionData(
+  nestedFields: FormField[],
+): Record<string, null> {
+  const out: Record<string, null> = {};
+
+  function walk(fieldList: FormField[]) {
+    for (const field of fieldList) {
+      if (field.type === 'step_section' || field.type === 'ui_section') {
+        if (field.fields?.length) walk(field.fields);
+        continue;
+      }
+      if (field.type === 'rich_text') continue;
+      out[field.id] = null;
+    }
+  }
+
+  walk(nestedFields);
+  return out;
+}
+
 /**
  * Cleans submission data by removing hidden fields and nested fields from non-selected options.
- * This ensures the submission exactly matches the visible form state.
+ * Unselected option nested forms are saved with null child values (not schema defaults).
  * Single responsibility: Clean submission data structure
  */
 export function cleanSubmissionData(
@@ -564,6 +629,7 @@ export function cleanSubmissionData(
   schemaFields: FormField[],
 ): Record<string, any> {
   const cleanedData: Record<string, any> = {};
+  const optionNestedFieldIds = getOptionNestedFieldIds(schemaFields);
 
   function processFields(fields: FormField[]) {
     fields.forEach((field) => {
@@ -583,71 +649,56 @@ export function cleanSubmissionData(
         cleanedData[field.id] = formData[field.id] || [];
       } else if (field.type === 'rich_text') {
         // Skip display-only fields
+      } else if (optionNestedFieldIds.has(field.id)) {
+        // Nested under a choice option — emitted under parent[field.id][optionValue]
       } else {
-        // Regular field: include value from formData
-        if (formData[field.id] !== undefined) {
-          cleanedData[field.id] =
-            field.type === 'matrix'
-              ? normalizeMatrixValue(field, formData[field.id])
-              : formData[field.id];
-        } else {
-          // Fallback to default if not present in formData
-          const fallbackValue =
-            field.default_value !== undefined
-              ? field.default_value
-              : getDefaultValueForFieldType(field.type);
+        const optionsWithNested =
+          field.optionConfigs?.filter((o) => o.nestedForm?.fields?.length) ?? [];
 
-          cleanedData[field.id] =
-            field.type === 'matrix'
-              ? normalizeMatrixValue(field, fallbackValue)
-              : fallbackValue;
+        if (optionsWithNested.length === 0) {
+          // Regular field: include value from formData
+          if (formData[field.id] !== undefined) {
+            cleanedData[field.id] =
+              field.type === 'matrix'
+                ? normalizeMatrixValue(field, formData[field.id])
+                : formData[field.id];
+          } else {
+            const fallbackValue =
+              field.default_value !== undefined
+                ? field.default_value
+                : getDefaultValueForFieldType(field.type);
+
+            cleanedData[field.id] =
+              field.type === 'matrix'
+                ? normalizeMatrixValue(field, fallbackValue)
+                : fallbackValue;
+          }
         }
       }
 
-      // Handle nested forms inside option configs
-      if (field.optionConfigs && field.optionConfigs.length > 0) {
+      // Nested forms inside option configs — one entry per option value
+      const optionsWithNested =
+        field.optionConfigs?.filter((o) => o.nestedForm?.fields?.length) ?? [];
+      if (optionsWithNested.length > 0) {
         const val = formData[field.id];
-        field.optionConfigs.forEach((opt) => {
-          if (opt.nestedForm && opt.nestedForm.fields) {
-            // Only process nested fields if this option is selected
-            const isSelected = Array.isArray(val)
-              ? val.includes(opt.value)
-              : val === opt.value;
+        const nestedFormObj: Record<string, any> = {};
 
-            if (isSelected) {
-              // Recursively clean nested form data
-              const nestedData = cleanSubmissionData(
-                formData,
-                opt.nestedForm.fields,
-              );
+        for (const opt of optionsWithNested) {
+          const nestedFields = opt.nestedForm!.fields;
+          const isSelected = Array.isArray(val)
+            ? val.includes(opt.value)
+            : val === opt.value;
 
-              if (Object.keys(nestedData).length > 0) {
-                // If it's the first nested form for this field, initialize the structure
-                if (
-                  typeof cleanedData[field.id] !== 'object' ||
-                  cleanedData[field.id] === null ||
-                  Array.isArray(cleanedData[field.id])
-                ) {
-                  // Keep track of all selected values to avoid losing them
-                  const allSelectedValues = Array.isArray(val) ? val : [val];
+          nestedFormObj[opt.value] = isSelected
+            ? cleanSubmissionData(formData, nestedFields)
+            : buildNullNestedSubmissionData(nestedFields);
+        }
 
-                  // Initialize as an object where keys are the selected option values
-                  const nestedFormObj: Record<string, any> = {};
+        if (val !== undefined) {
+          nestedFormObj[NESTED_OPTION_SELECTION_KEY] = val;
+        }
 
-                  // Fill in all selected values (with empty objects if no nested data yet)
-                  allSelectedValues.forEach((v) => {
-                    nestedFormObj[v] = v === opt.value ? nestedData : {};
-                  });
-
-                  cleanedData[field.id] = nestedFormObj;
-                } else {
-                  // Already an object, add this option's nested data
-                  cleanedData[field.id][opt.value] = nestedData;
-                }
-              }
-            }
-          }
-        });
+        cleanedData[field.id] = nestedFormObj;
       }
     });
   }

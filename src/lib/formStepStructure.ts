@@ -1,6 +1,6 @@
 import type { FormField } from '../types/form';
 import type { FormSubmissionData } from '../types/submission';
-import { shouldShowField } from './formUtils';
+import { getChoiceFieldValue, shouldShowField } from './formUtils';
 import { validateFormWithZod } from './zodValidation';
 
 export interface StepGroup {
@@ -204,7 +204,7 @@ export function collectVisibleFields(
       }
 
       if (field.optionConfigs?.length) {
-        const val = values[field.id];
+        const val = getChoiceFieldValue(values[field.id]);
         for (const opt of field.optionConfigs) {
           const isSelected = Array.isArray(val)
             ? val.includes(opt.value)

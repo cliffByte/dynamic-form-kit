@@ -1,4 +1,5 @@
 import type { FormField } from '../types/form';
+import { getChoiceFieldValue } from './formUtils';
 
 type MediaFileLike = {
   id?: string;
@@ -161,7 +162,7 @@ async function walkFields(
     }
 
     if (field.optionConfigs?.length) {
-      const val = values[field.id];
+      const val = getChoiceFieldValue(values[field.id]);
       for (const opt of field.optionConfigs) {
         const isSelected = Array.isArray(val)
           ? val.includes(opt.value)

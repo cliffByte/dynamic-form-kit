@@ -6,6 +6,7 @@ import { Badge } from '../ui/badge';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { getLocalizedValue } from '../../lib/utils';
+import { getChoiceFieldValue } from '../../lib/formUtils';
 import { useFormKit } from '../../context/FormKitContext';
 
 export function DisplaySelectField({
@@ -64,7 +65,12 @@ export function DisplaySelectField({
   const getNestedForms = () => {
     if (!field.optionConfigs) return [];
 
-    const selectedValues = Array.isArray(value) ? value : value ? [value] : [];
+    const choiceValue = getChoiceFieldValue(value);
+    const selectedValues = Array.isArray(choiceValue)
+      ? choiceValue
+      : choiceValue
+        ? [choiceValue]
+        : [];
     return field.optionConfigs
       .filter((c) => selectedValues.includes(c.value) && c.nestedForm)
       .map((c) => ({ optionLabel: c.label, nestedForm: c.nestedForm! }));
@@ -100,7 +106,8 @@ export function DisplaySelectField({
       );
     }
 
-    if (value === undefined || value === null || value === '') {
+    const choiceValue = getChoiceFieldValue(value);
+    if (choiceValue === undefined || choiceValue === null || choiceValue === '') {
       return (
         <span className='text-muted-foreground/50 italic text-sm'>
           Not selected
@@ -108,8 +115,8 @@ export function DisplaySelectField({
       );
     }
 
-    if (Array.isArray(value)) {
-      if (value.length === 0)
+    if (Array.isArray(choiceValue)) {
+      if (choiceValue.length === 0)
         return (
           <span className='text-muted-foreground/50 italic text-sm'>
             None selected
@@ -117,7 +124,7 @@ export function DisplaySelectField({
         );
       return (
         <div className='flex flex-wrap gap-1.5'>
-          {value.map((v, i) => (
+          {choiceValue.map((v, i) => (
             <Badge key={i} variant='secondary' className='font-medium'>
               {getLabel(v)}
             </Badge>
@@ -128,7 +135,7 @@ export function DisplaySelectField({
 
     return (
       <span className='text-foreground font-medium text-base'>
-        {getLabel(value)}
+        {getLabel(choiceValue)}
       </span>
     );
   };

@@ -49,6 +49,8 @@ export {
   createEnhancedSubmission,
   cleanSubmissionData,
   evaluateFormula,
+  getChoiceFieldValue,
+  NESTED_OPTION_SELECTION_KEY,
 } from './lib/formUtils';
 export {
   validateFieldWithZod,
@@ -72,6 +74,7 @@ export {
 export {
   extractSchemaFields,
   extractSubmissionValues,
+  expandNestedOptionSubmission,
   mapDefaultValuesToFieldIds,
   type FormKitValues,
 } from './lib/submissionUtils';

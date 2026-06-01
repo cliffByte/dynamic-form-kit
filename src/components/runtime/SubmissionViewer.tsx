@@ -12,6 +12,7 @@ import { FormKitRoot } from '../FormKitRoot';
 import { DisplayFieldRenderer } from '../display-fields/DisplayFieldRenderer';
 import {
   extractSchemaFields,
+  expandNestedOptionSubmission,
   extractSubmissionValues,
 } from '../../lib/submissionUtils';
 
@@ -75,10 +76,10 @@ export function SubmissionViewer({
     () => applyFieldVisibility(localizedFields, hide),
     [localizedFields, hide],
   );
-  const values = useMemo(
-    () => extractSubmissionValues(submission) as Values,
-    [submission],
-  );
+  const values = useMemo(() => {
+    const extracted = extractSubmissionValues(submission) as Values;
+    return expandNestedOptionSubmission(fields, extracted);
+  }, [submission, fields]);
   const valuesRef = useRef<Values>(values);
 
   const [dynamicOptions, setDynamicOptions] = React.useState<

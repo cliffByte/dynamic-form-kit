@@ -14,6 +14,7 @@ import { FormKitRoot } from '../FormKitRoot';
 import { FormFieldRenderer } from '../form-fields/FormFieldRenderer';
 import {
   extractSchemaFields,
+  expandNestedOptionSubmission,
   extractSubmissionValues,
   mapDefaultValuesToFieldIds,
 } from '../../lib/submissionUtils';
@@ -157,7 +158,8 @@ export function FormRenderer({
 
   const derivedInitialValues = useMemo((): Values => {
     if (submission != null) {
-      return extractSubmissionValues(submission) as Values;
+      const extracted = extractSubmissionValues(submission) as Values;
+      return expandNestedOptionSubmission(fields, extracted);
     }
     const base = createEnhancedSubmission(fields).submissionData as Values;
     const mappedDefaults = mapDefaultValuesToFieldIds(fields, defaultValues);
