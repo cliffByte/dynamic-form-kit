@@ -13,6 +13,7 @@ import { useFormBuilderStore } from './formbuilder/store/useFormBuilderStore';
 import { cn, formatNumberByLocale } from '../lib/utils';
 import { useLocalizedFields } from '../hooks/useLocalizedField';
 import { getNestedValue } from '../hooks/useDynamicOptions';
+import { buildDynamicDataSourceRequest } from '../lib/dynamicDataSourceRequest';
 import { getLanguagesWithNames } from '../lib/formLanguages';
 import { useFormKit } from '../context/FormKitContext';
 import { toast } from 'sonner';
@@ -116,50 +117,20 @@ export function FormPreviewModal({ fields, hide }: FormPreviewModalProps) {
       setErrorFields((prev) => ({ ...prev, [field.id]: '' }));
 
       try {
-        let url = field.dataSource.url;
-        const method = field.dataSource.method || 'GET';
+        const parentValue = field.dataSource.dependsOn
+          ? formDataRef.current[field.dataSource.dependsOn]
+          : undefined;
 
-        // Handle cascading select - use ref to avoid dependency on formData
-        if (field.dataSource.dependsOn && field.dataSource.parentValuePath) {
-          const parentValue = formDataRef.current[field.dataSource.dependsOn];
-          if (parentValue) {
-            url = url.replace(
-              `{${field.dataSource.parentValuePath}}`,
-              parentValue,
-            );
-          } else {
-            setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
-            setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
-            return;
-          }
+        if (field.dataSource.dependsOn && !parentValue) {
+          setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
+          setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
+          return;
         }
 
-        const fetchOptions: RequestInit = {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...field.dataSource.headers,
-          },
-        };
-
-        if (method === 'POST' && field.dataSource.body) {
-          fetchOptions.body = JSON.stringify(field.dataSource.body);
-        }
-
-        if (
-          method === 'POST' &&
-          field.dataSource.dependsOn &&
-          field.dataSource.parentValueParam
-        ) {
-          const parentValue = formDataRef.current[field.dataSource.dependsOn];
-          if (parentValue) {
-            const bodyData = field.dataSource.body || {};
-            fetchOptions.body = JSON.stringify({
-              ...bodyData,
-              [field.dataSource.parentValueParam]: parentValue,
-            });
-          }
-        }
+        const { url, init: fetchOptions } = buildDynamicDataSourceRequest(
+          field.dataSource,
+          parentValue,
+        );
 
         const response = await fetch(url, fetchOptions);
 

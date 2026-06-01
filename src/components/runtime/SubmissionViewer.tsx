@@ -5,6 +5,7 @@ import type { FormField } from '../../types/form';
 import { shouldShowField } from '../../lib/formUtils';
 import { applyFieldVisibility, collectVisibleFields } from '../../lib/formStepStructure';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
+import { buildDynamicDataSourceRequest } from '../../lib/dynamicDataSourceRequest';
 import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { cn } from '../../lib/utils';
 import { FormKitRoot } from '../FormKitRoot';
@@ -28,24 +29,10 @@ async function fetchDynamicOptionsForField(
   if (!ds) return [];
   if (ds.dependsOn && !parentValue) return [];
 
-  let url = ds.url;
-  if (ds.parentValuePath && parentValue) {
-    url = url.replace(ds.parentValuePath, encodeURIComponent(String(parentValue)));
-  }
-
-  const requestOptions: RequestInit = {
-    method: ds.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(ds.headers ?? {}),
-    },
-  };
-
-  if (ds.dependsOn && ds.parentValueParam && parentValue) {
-    const urlObj = new URL(url);
-    urlObj.searchParams.append(ds.parentValueParam, String(parentValue));
-    url = urlObj.toString();
-  }
+  const { url, init: requestOptions } = buildDynamicDataSourceRequest(
+    ds,
+    parentValue,
+  );
 
   const response = await fetch(url, requestOptions);
   if (!response.ok) {

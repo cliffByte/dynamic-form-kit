@@ -1,10 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { FormField, OptionConfig, NestedForm } from '../../../../../types/form';
 import { Button } from '../../../../ui/button';
 import { Input } from '../../../../ui/input';
 import { Label } from '../../../../ui/label';
+import { Textarea } from '../../../../ui/textarea';
+import {
+  formatDataSourceBody,
+  parseDataSourceBody,
+} from '../../../../../lib/dynamicDataSourceRequest';
 import {
   Select,
   SelectContent,
@@ -51,6 +56,28 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
   updateNestedFormName,
 }) => {
   const isEn = editingLocale === 'en';
+  const isPost = (field.dataSource?.method || 'GET') === 'POST';
+  const [bodyText, setBodyText] = useState(() =>
+    formatDataSourceBody(field.dataSource?.body),
+  );
+  const [bodyError, setBodyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBodyText(formatDataSourceBody(field.dataSource?.body));
+    setBodyError(null);
+  }, [field.id, field.dataSource?.body]);
+
+  const commitBody = (text: string) => {
+    const result = parseDataSourceBody(text);
+    if (!result.ok) {
+      setBodyError(result.error);
+      return;
+    }
+    setBodyError(null);
+    updateField(field.id, {
+      dataSource: { ...field.dataSource!, body: result.body },
+    });
+  };
 
   const needsOptions = [
     'select',
@@ -349,6 +376,36 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
               />
             </div>
           </div>
+
+          {isPost && (
+            <div className='space-y-2'>
+              <Label className='text-xs font-semibold'>Request Body (JSON)</Label>
+              <Textarea
+                value={bodyText}
+                onChange={(e) => {
+                  setBodyText(e.target.value);
+                  if (bodyError) setBodyError(null);
+                }}
+                onBlur={(e) => commitBody(e.target.value)}
+                placeholder={`{
+  "page": 1,
+  "pageSize": 50
+}`}
+                rows={6}
+                className='font-mono text-xs'
+              />
+              {bodyError ? (
+                <p className='text-[10px] text-destructive'>{bodyError}</p>
+              ) : (
+                <p className='text-[10px] text-muted-foreground'>
+                  Paste JSON for the POST body. On blur, valid JSON is saved.
+                  {field.dataSource?.dependsOn && field.dataSource?.parentValueParam
+                    ? ` The parent field value is merged as "${field.dataSource.parentValueParam}" when the form loads options.`
+                    : ''}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className='space-y-2'>
             <Label className='text-xs font-semibold'>JSON Response Path</Label>

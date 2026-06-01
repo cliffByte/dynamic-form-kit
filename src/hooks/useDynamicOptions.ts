@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DynamicDataSource } from '../types/form';
+import { buildDynamicDataSourceRequest } from '../lib/dynamicDataSourceRequest';
 
 interface UseDynamicOptionsResult {
   options: Array<{ value: string; label: string }>;
@@ -40,34 +41,10 @@ export function useDynamicOptions(
     setError(null);
 
     try {
-      let url = dataSource.url;
-
-      // Replace URL placeholder with parent value if exists
-      if (dataSource.parentValuePath && parentValue) {
-        url = url.replace(
-          dataSource.parentValuePath,
-          encodeURIComponent(String(parentValue)),
-        );
-      }
-
-      // Prepare request options
-      const requestOptions: RequestInit = {
-        method: dataSource.method || 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...dataSource.headers,
-        },
-      };
-
-      // Add parent value as query param if specified
-      if (dataSource.dependsOn && dataSource.parentValueParam && parentValue) {
-        const urlObj = new URL(url);
-        urlObj.searchParams.append(
-          dataSource.parentValueParam,
-          String(parentValue),
-        );
-        url = urlObj.toString();
-      }
+      const { url, init: requestOptions } = buildDynamicDataSourceRequest(
+        dataSource,
+        parentValue,
+      );
 
       const response = await fetch(url, requestOptions);
 

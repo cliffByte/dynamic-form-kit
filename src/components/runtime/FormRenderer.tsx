@@ -5,6 +5,7 @@ import type { FormField } from '../../types/form';
 import { createEnhancedSubmission, shouldShowField } from '../../lib/formUtils';
 import { cleanSubmissionData } from '../../lib/formUtils';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
+import { buildDynamicDataSourceRequest } from '../../lib/dynamicDataSourceRequest';
 import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { useFormKit } from '../../context/FormKitContext';
 import { Button } from '../ui/button';
@@ -52,27 +53,10 @@ async function fetchDynamicOptionsForField(
 
   if (ds.dependsOn && !parentValue) return [];
 
-  let url = ds.url;
-  if (ds.parentValuePath && parentValue) {
-    const placeholder = ds.parentValuePath.startsWith('{')
-      ? ds.parentValuePath
-      : `{${ds.parentValuePath}}`;
-    url = url.replace(placeholder, encodeURIComponent(String(parentValue)));
-  }
-
-  const requestOptions: RequestInit = {
-    method: ds.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(ds.headers ?? {}),
-    },
-  };
-
-  if (ds.dependsOn && ds.parentValueParam && parentValue) {
-    const urlObj = new URL(url);
-    urlObj.searchParams.append(ds.parentValueParam, String(parentValue));
-    url = urlObj.toString();
-  }
+  const { url, init: requestOptions } = buildDynamicDataSourceRequest(
+    ds,
+    parentValue,
+  );
 
   const response = await fetch(url, requestOptions);
   if (!response.ok) {
