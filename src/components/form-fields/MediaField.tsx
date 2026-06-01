@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Upload,
   X,
@@ -19,6 +19,12 @@ import { FieldWrapper } from './FieldWrapper';
 import { BaseFieldProps } from './types';
 import { cn } from '../../lib/utils';
 import { useFormKit } from '../../context/FormKitContext';
+import {
+  getMediaMaxFiles,
+  isMediaMultipleField,
+  normalizeMediaFieldValue,
+  toMediaFieldValue,
+} from '../../lib/mediaUploadUtils';
 
 interface MediaFile {
   id?: string;
@@ -57,8 +63,9 @@ function isImageFile(file: MediaFile): boolean {
 // Shared upload logic
 // ---------------------------------------------------------------------------
 function useFileUploader(
-  files: MediaFile[],
-  multiple: boolean,
+  filesRef: React.MutableRefObject<MediaFile[]>,
+  allowMultiple: boolean,
+  maxFiles: number,
   maxSize: number,
   onChange: (val: any) => void,
   uploadMedia: (formData: FormData) => Promise<{ url: string; filename: string }>,
@@ -72,8 +79,15 @@ function useFileUploader(
       if (!fileList || fileList.length === 0) return;
       setUploading(true);
       const newFiles: MediaFile[] = [];
+      const currentFiles = filesRef.current;
+      const remaining = allowMultiple
+        ? Math.max(0, maxFiles - currentFiles.length)
+        : 1;
+      const limit = allowMultiple
+        ? Math.min(fileList.length, remaining)
+        : 1;
       try {
-        for (let i = 0; i < fileList.length; i++) {
+        for (let i = 0; i < limit; i++) {
           const file = fileList[i];
           if (file.size > maxSize) continue;
           let preview: string | undefined;
@@ -106,13 +120,27 @@ function useFileUploader(
             }
           } catch {}
         }
-        if (multiple) onChange([...files, ...newFiles]);
-        else if (newFiles.length > 0) onChange(newFiles[0]);
+        if (newFiles.length === 0) return;
+
+        const merged = allowMultiple
+          ? [...currentFiles, ...newFiles].slice(0, maxFiles)
+          : [newFiles[0]];
+
+        filesRef.current = merged;
+        onChange(toMediaFieldValue(merged, allowMultiple));
       } finally {
         setUploading(false);
       }
     },
-    [files, multiple, maxSize, onChange, uploadMedia, deferMediaUpload],
+    [
+      filesRef,
+      allowMultiple,
+      maxFiles,
+      maxSize,
+      onChange,
+      uploadMedia,
+      deferMediaUpload,
+    ],
   );
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -140,6 +168,7 @@ function useFileUploader(
 function DropZone({
   fieldId,
   multiple,
+  maxFiles,
   acceptedTypes,
   maxSize,
   deferMediaUpload,
@@ -152,6 +181,7 @@ function DropZone({
 }: {
   fieldId: string;
   multiple: boolean;
+  maxFiles: number;
   acceptedTypes: string[];
   maxSize: number;
   deferMediaUpload?: boolean;
@@ -176,6 +206,7 @@ function DropZone({
         disabled && 'opacity-50 cursor-not-allowed',
       )}>
       <input
+        key={`${fieldId}-${multiple ? 'multi' : 'single'}`}
         type='file'
         id={fieldId}
         multiple={multiple}
@@ -203,7 +234,8 @@ function DropZone({
           </p>
           <p className='text-xs text-muted-foreground mt-1'>
             Max size: {formatFileSize(maxSize)}
-            {multiple && ' • Multiple files allowed'}
+            {multiple &&
+              ` • Up to ${maxFiles} file${maxFiles === 1 ? '' : 's'}`}
             {deferMediaUpload && ' • Uploads when you submit the form'}
           </p>
         </div>
@@ -322,17 +354,17 @@ function MediaFieldEdit({
 
   const acceptedTypes = field.acceptedTypes || ['image/*', 'application/pdf'];
   const maxSize = field.maxSize || 10 * 1024 * 1024;
-  const multiple = field.multiple ?? false;
-  const files: MediaFile[] = Array.isArray(value)
-    ? value
-    : value
-      ? [value]
-      : [];
+  const maxFiles = getMediaMaxFiles(field);
+  const allowMultiple = isMediaMultipleField(field);
+  const files = normalizeMediaFieldValue(value) as MediaFile[];
+  const filesRef = useRef<MediaFile[]>(files);
+  filesRef.current = files;
 
   const { dragActive, uploading, processFiles, handleDrag, handleDrop } =
     useFileUploader(
-      files,
-      multiple,
+      filesRef,
+      allowMultiple,
+      maxFiles,
       maxSize,
       onChange,
       uploadMedia,
@@ -340,8 +372,9 @@ function MediaFieldEdit({
     );
 
   const removeFile = (index: number) => {
-    if (multiple) onChange(files.filter((_, i) => i !== index));
-    else onChange(null);
+    const next = files.filter((_, i) => i !== index);
+    filesRef.current = next;
+    onChange(toMediaFieldValue(next, allowMultiple));
   };
 
   useEffect(() => {
@@ -364,11 +397,12 @@ function MediaFieldEdit({
       <div className='space-y-3'>
         <DropZone
           fieldId={field.id}
-          multiple={multiple}
+          multiple={allowMultiple}
+          maxFiles={maxFiles}
           acceptedTypes={acceptedTypes}
           maxSize={maxSize}
           deferMediaUpload={deferMediaUpload}
-          disabled={disabled}
+          disabled={disabled || (allowMultiple && files.length >= maxFiles)}
           dragActive={dragActive}
           uploading={uploading}
           handleDrag={handleDrag}

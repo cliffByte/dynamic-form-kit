@@ -236,11 +236,13 @@ export const MediaEditor: React.FC<MediaEditorProps> = ({
               min='1'
               max='10'
               value={field.maxFiles || 1}
-              onChange={(e) =>
+              onChange={(e) => {
+                const maxFiles = parseInt(e.target.value) || 1;
                 updateField(field.id, {
-                  maxFiles: parseInt(e.target.value) || 1,
-                })
-              }
+                  maxFiles,
+                  ...(maxFiles > 1 ? { multiple: true } : {}),
+                });
+              }}
             />
             <p className='text-xs text-gray-500'>Maximum 10 files allowed</p>
           </div>

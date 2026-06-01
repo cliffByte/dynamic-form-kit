@@ -8,6 +8,7 @@ import {
 } from './languageValidation';
 import { resolveDateConstraint } from './dateConstraint';
 import { parseStoredDateValue } from './nepaliCalendar';
+import { getMediaMaxFiles, isMediaMultipleField } from './mediaUploadUtils';
 
 function resolveSubmittedDate(
   val: string | Date | undefined,
@@ -31,7 +32,7 @@ export function isEmptyFieldValue(field: FormField, value: unknown): boolean {
     case 'multi_select':
       return Array.isArray(value) && value.length === 0;
     case 'media':
-      if (field.multiple) {
+      if (isMediaMultipleField(field)) {
         return Array.isArray(value) && value.length === 0;
       }
       if (value === '') return true;
@@ -572,7 +573,8 @@ export function buildFieldSchema(
         );
       };
 
-      if (field.multiple) {
+      if (isMediaMultipleField(field)) {
+        const maxFiles = getMediaMaxFiles(field);
         schema = z
           .array(z.any())
           .refine(
@@ -587,12 +589,10 @@ export function buildFieldSchema(
           );
         }
 
-        if (field.maxFiles) {
-          schema = (schema as z.ZodArray<any>).max(
-            field.maxFiles,
-            `${getLabel()} allows maximum ${field.maxFiles} files`,
-          );
-        }
+        schema = (schema as z.ZodArray<any>).max(
+          maxFiles,
+          `${getLabel()} allows maximum ${maxFiles} files`,
+        );
       } else {
         schema = z.any().refine(
           (val) => {

@@ -1,5 +1,55 @@
 import type { FormField } from '../types/form';
 
+type MediaFileLike = {
+  id?: string;
+  url?: string;
+  name?: string;
+  size?: number;
+  type?: string;
+  preview?: string;
+  file?: File;
+};
+
+/** Parse maxFiles from schema (handles string values and snake_case from API). */
+export function parseMediaMaxFiles(field: FormField): number {
+  const raw =
+    field.maxFiles ?? (field as { max_files?: unknown }).max_files;
+  const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw);
+  if (Number.isFinite(n) && n >= 1) return Math.floor(n);
+  return 1;
+}
+
+/** Normalize stored form value to a file list for the media field UI. */
+export function normalizeMediaFieldValue(value: unknown): MediaFileLike[] {
+  if (value == null || value === '') return [];
+  if (Array.isArray(value)) return value as MediaFileLike[];
+  if (typeof value === 'object') return [value as MediaFileLike];
+  return [];
+}
+
+/** Shape written back to form state (array when multi-upload is allowed). */
+export function toMediaFieldValue(
+  files: MediaFileLike[],
+  allowMultiple: boolean,
+): MediaFileLike | MediaFileLike[] | null {
+  if (files.length === 0) return allowMultiple ? [] : null;
+  return allowMultiple ? files : files[0];
+}
+
+/** True when the media field allows more than one file. maxFiles wins over legacy `multiple: false`. */
+export function isMediaMultipleField(field: FormField): boolean {
+  if (parseMediaMaxFiles(field) > 1) return true;
+  return field.multiple === true;
+}
+
+/** Effective upload cap for a media field. */
+export function getMediaMaxFiles(field: FormField): number {
+  const fromConfig = parseMediaMaxFiles(field);
+  if (fromConfig > 1) return fromConfig;
+  if (field.multiple === true) return 10;
+  return 1;
+}
+
 export interface MediaValueShape {
   id?: string;
   url?: string;
@@ -62,9 +112,10 @@ async function processMediaFieldValue(
   field: FormField,
   uploadMedia: UploadMediaFn,
 ): Promise<unknown> {
-  if (field.multiple) {
-    if (!Array.isArray(value)) return value;
-    return Promise.all(value.map((item) => uploadMediaItem(item, uploadMedia)));
+  if (isMediaMultipleField(field)) {
+    const items = normalizeMediaFieldValue(value);
+    if (items.length === 0) return value;
+    return Promise.all(items.map((item) => uploadMediaItem(item, uploadMedia)));
   }
 
   if (value == null || value === '') return value;
