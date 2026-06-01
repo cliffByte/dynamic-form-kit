@@ -37,6 +37,7 @@ import { RatingEditor } from './components/RatingEditor';
 import { TextareaEditor } from './components/TextareaEditor';
 import { ArrayEditor } from './components/ArrayEditor';
 import { PhoneEditor } from './components/PhoneEditor';
+import { DefaultValueEditor } from './components/DefaultValueEditor';
 
 interface FieldEditorProps {
   field?: FormField;
@@ -327,6 +328,12 @@ const FieldEditorComponent = React.memo(function FieldEditor(
         <TextareaEditor field={field} updateField={updateField} />
         <ArrayEditor field={field} updateField={updateField} />
         <PhoneEditor field={field} updateField={updateField} />
+
+        <DefaultValueEditor
+          field={field}
+          editingLocale={editingLocale}
+          updateField={updateField}
+        />
 
         <ValidationEditor
           field={field}
