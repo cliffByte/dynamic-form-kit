@@ -29,25 +29,6 @@ export const StepSectionEditor: React.FC<StepSectionEditorProps> = ({
       </h4>
 
       <div className='space-y-2'>
-        <Label htmlFor='step-unique-key'>Step key (for dynamic visibility)</Label>
-        <Input
-          id='step-unique-key'
-          type='text'
-          value={field.uniqueIdentifier || ''}
-          onChange={(e) =>
-            updateField(field.id, { uniqueIdentifier: e.target.value })
-          }
-          className='font-mono'
-          placeholder='userinfo_step, basicinfo_step'
-        />
-        <p className='text-xs text-muted-foreground'>
-          Pass this key in <code className='text-xs'>hideSteps</code> on{' '}
-          <code className='text-xs'>FormRenderer</code> to hide this step at
-          runtime.
-        </p>
-      </div>
-
-      <div className='space-y-2'>
         <Label htmlFor='step-number'>Step Number</Label>
         <Input
           id='step-number'
@@ -108,23 +89,6 @@ export const StepSectionEditor: React.FC<StepSectionEditorProps> = ({
             htmlFor='expanded'
             className='cursor-pointer text-sm font-medium'>
             Expanded by default
-          </Label>
-        </div>
-
-        <div className='flex items-center gap-2'>
-          <input
-            type='checkbox'
-            id='section-hidden'
-            checked={field.isHidden || false}
-            onChange={(e) =>
-              updateField(field.id, { isHidden: e.target.checked })
-            }
-            className='w-4 h-4 rounded border-gray-300'
-          />
-          <Label
-            htmlFor='section-hidden'
-            className='cursor-pointer text-sm font-medium'>
-            Hidden in form submission
           </Label>
         </div>
       </div>

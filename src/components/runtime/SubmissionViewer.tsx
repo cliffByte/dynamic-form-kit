@@ -3,8 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FormField } from '../../types/form';
 import { shouldShowField } from '../../lib/formUtils';
-import { collectVisibleFields } from '../../lib/formStepStructure';
+import { applyFieldVisibility, collectVisibleFields } from '../../lib/formStepStructure';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
+import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { cn } from '../../lib/utils';
 import { FormKitRoot } from '../FormKitRoot';
 import { DisplayFieldRenderer } from '../display-fields/DisplayFieldRenderer';
@@ -69,6 +70,8 @@ export interface SubmissionViewerProps {
   className?: string;
   fieldsClassName?: string;
   compact?: boolean;
+  /** When true, hides all fields marked `hideable` in the form schema. */
+  hide?: boolean;
 }
 
 export function SubmissionViewer({
@@ -77,8 +80,14 @@ export function SubmissionViewer({
   className,
   fieldsClassName,
   compact,
+  hide,
 }: SubmissionViewerProps): React.ReactElement {
-  const fields = useMemo(() => extractSchemaFields(form), [form]);
+  const rawFields = useMemo(() => extractSchemaFields(form), [form]);
+  const localizedFields = useLocalizedFields(rawFields);
+  const fields = useMemo(
+    () => applyFieldVisibility(localizedFields, hide),
+    [localizedFields, hide],
+  );
   const values = useMemo(
     () => extractSubmissionValues(submission) as Values,
     [submission],

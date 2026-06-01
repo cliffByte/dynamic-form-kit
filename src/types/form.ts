@@ -131,7 +131,8 @@ export interface FormField {
   placeholder?: string;
   default_value?: any; // Default value for the field
   required: boolean;
-  isHidden?: boolean; // Controls visibility in submission page
+  isHidden?: boolean; // Always hidden in the form (submission UI)
+  hideable?: boolean; // Hidden when FormRenderer receives hide={true}
   isDisabled?: boolean; // Controls whether field is disabled in submission page
   defaultCountry?: string; // Default country code for phone input (e.g., 'NP', 'US')
   textareaRows?: number; // Number of rows for textarea fields (default: 4)

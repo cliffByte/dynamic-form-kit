@@ -15,33 +15,55 @@ export interface FormStructure {
   hasSteps: boolean;
 }
 
+function shouldHideField(field: FormField, hide?: boolean): boolean {
+  if (field.isHidden === true) return true;
+  if (hide === true && field.hideable === true) return true;
+  return false;
+}
+
+function applyVisibilityToField(
+  field: FormField,
+  hide?: boolean,
+): FormField {
+  const shouldHide = shouldHideField(field, hide);
+
+  const nestedFields = field.fields?.length
+    ? field.fields.map((child) => applyVisibilityToField(child, hide))
+    : field.fields;
+
+  if (!shouldHide && nestedFields === field.fields) {
+    return field;
+  }
+
+  return {
+    ...field,
+    isHidden: shouldHide ? true : field.isHidden,
+    fields: nestedFields,
+  };
+}
+
 /**
- * Merges static `isHidden` on step sections with a host-provided map keyed by
- * `uniqueIdentifier`. Returns a shallow-cloned field list (schema is not mutated).
+ * Applies visibility for the render pipeline:
+ * - `isHidden` on the schema always hides the field
+ * - `hide={true}` additionally hides fields marked `hideable`
  */
-export function applyStepVisibility(
+export function applyFieldVisibility(
   fields: FormField[],
-  hideSteps?: Record<string, boolean>,
+  hide?: boolean,
 ): FormField[] {
-  if (!hideSteps || Object.keys(hideSteps).length === 0) {
+  if (hide !== true) {
     return fields;
   }
 
-  return fields.map((field) => {
-    if (field.type !== 'step_section') {
-      return field;
-    }
+  return fields.map((field) => applyVisibilityToField(field, hide));
+}
 
-    const stepKey = field.uniqueIdentifier?.trim();
-    const hideFromMap = stepKey ? hideSteps[stepKey] === true : false;
-    const shouldHide = field.isHidden === true || hideFromMap;
-
-    if (!shouldHide) {
-      return field;
-    }
-
-    return { ...field, isHidden: true };
-  });
+/** @deprecated Use `applyFieldVisibility` instead. */
+export function applyStepVisibility(
+  fields: FormField[],
+  hide?: boolean,
+): FormField[] {
+  return applyFieldVisibility(fields, hide);
 }
 
 /**
@@ -199,7 +221,7 @@ export function collectVisibleFields(
   return out;
 }
 
-function pickSubmissionValuesForFields(
+export function pickSubmissionValuesForFields(
   visibleFields: FormField[],
   values: FormSubmissionData,
 ): FormSubmissionData {
@@ -285,6 +307,22 @@ export function validateWizardSteps(
   }
 
   return { isValid: true, errors: {}, firstInvalidStepIndex: -1 };
+}
+
+/**
+ * Validate only fields visible in the current form state (respects isHidden and conditional logic).
+ */
+export function validateVisibleFields(
+  fields: FormField[],
+  values: FormSubmissionData,
+  locale?: string,
+): { isValid: boolean; errors: Record<string, string> } {
+  const visible = collectVisibleFields(fields, values);
+  if (visible.length === 0) {
+    return { isValid: true, errors: {} };
+  }
+  const data = pickSubmissionValuesForFields(visible, values);
+  return validateFormWithZod(visible, data, locale);
 }
 
 /** Replace step-scoped errors while preserving errors from other steps. */

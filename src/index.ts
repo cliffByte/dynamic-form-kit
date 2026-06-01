@@ -82,6 +82,7 @@ export {
 } from './lib/mediaUploadUtils';
 
 export {
+  applyFieldVisibility,
   applyStepVisibility,
   groupStepSections,
   isMultiStepWizard,
@@ -89,9 +90,11 @@ export {
   scrollToFirstFieldError,
   findStepIndexForFieldId,
   collectVisibleFields,
+  pickSubmissionValuesForFields,
   getStepVisibleFieldIds,
   validateStepSection,
   validateWizardSteps,
+  validateVisibleFields,
   mergeStepValidationErrors,
   type StepGroup,
   type FormStructure,

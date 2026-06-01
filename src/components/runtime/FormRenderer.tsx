@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormField } from '../../types/form';
 import { createEnhancedSubmission, shouldShowField } from '../../lib/formUtils';
 import { cleanSubmissionData } from '../../lib/formUtils';
-import { validateFormWithZod } from '../../lib/validationUtils';
 import { getNestedValue } from '../../hooks/useDynamicOptions';
 import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { useFormKit } from '../../context/FormKitContext';
@@ -19,7 +18,7 @@ import {
 } from '../../lib/submissionUtils';
 import { uploadPendingMediaInValues } from '../../lib/mediaUploadUtils';
 import {
-  applyStepVisibility,
+  applyFieldVisibility,
   groupStepSections,
   isMultiStepWizard,
   markFieldsTouched,
@@ -29,6 +28,7 @@ import {
   mergeStepValidationErrors,
   validateStepSection,
   validateWizardSteps,
+  validateVisibleFields,
   type StepGroup,
 } from '../../lib/formStepStructure';
 import {
@@ -108,10 +108,9 @@ export interface FormRendererProps {
   /** When true (default), schemas with 2+ `step_section` fields use wizard navigation. */
   enableMultiStep?: boolean;
   /**
-   * Hide root-level `step_section` fields by `uniqueIdentifier`.
-   * Example: `{ userinfo_step: true }` hides that step from the wizard and submission UI.
+   * When true, hides all fields marked `hideable` in the form schema.
    */
-  hideSteps?: Record<string, boolean>;
+  hide?: boolean;
   /**
    * When true (default), media files upload on submit instead of on select.
    * Overrides `FormKitProvider` `deferMediaUpload` when set.
@@ -146,7 +145,7 @@ export function FormRenderer({
   submitLabel: submitLabelProp,
   disabled,
   enableMultiStep = true,
-  hideSteps,
+  hide,
   deferMediaUpload: deferMediaUploadProp,
   stepLabels,
   showReset: showResetProp,
@@ -168,8 +167,8 @@ export function FormRenderer({
   const rawFields = useMemo(() => extractSchemaFields(form), [form]);
   const localizedFields = useLocalizedFields(rawFields);
   const fields = useMemo(
-    () => applyStepVisibility(localizedFields, hideSteps),
-    [localizedFields, hideSteps],
+    () => applyFieldVisibility(localizedFields, hide),
+    [localizedFields, hide],
   );
 
   const derivedInitialValues = useMemo((): Values => {
@@ -497,8 +496,7 @@ export function FormRenderer({
         throw new Error('Validation failed');
       }
     } else {
-      const preUploadCleaned = cleanSubmissionData(rawValues, fields);
-      validation = validateFormWithZod(fields, preUploadCleaned, locale);
+      validation = validateVisibleFields(fields, rawValues, locale);
       setValidationErrors(validation.errors || {});
 
       if (!validation.isValid) {

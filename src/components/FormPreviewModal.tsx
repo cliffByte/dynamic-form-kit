@@ -10,7 +10,6 @@ import React, {
 import { FormField } from '../types/form';
 import { EnhancedFormSubmission } from '../types/submission';
 import { useFormBuilderStore } from './formbuilder/store/useFormBuilderStore';
-import { validateFormWithZod } from '../lib/validationUtils';
 import { cn, formatNumberByLocale } from '../lib/utils';
 import { useLocalizedFields } from '../hooks/useLocalizedField';
 import { getNestedValue } from '../hooks/useDynamicOptions';
@@ -21,7 +20,7 @@ import { toast } from 'sonner';
 // Import modular field components
 import { FormFieldRenderer, DynamicOption } from './form-fields';
 import { createFieldMap, shouldShowField } from '../lib/formUtils';
-import { groupStepSections, type StepGroup, validateStepSection, validateWizardSteps, mergeStepValidationErrors, getStepVisibleFieldIds } from '../lib/formStepStructure';
+import { groupStepSections, type StepGroup, validateStepSection, validateWizardSteps, validateVisibleFields, mergeStepValidationErrors, getStepVisibleFieldIds, applyFieldVisibility } from '../lib/formStepStructure';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft, ArrowRight, Check, Eye } from 'lucide-react';
@@ -29,13 +28,19 @@ import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 
 interface FormPreviewModalProps {
   fields: FormField[];
+  /** When true, hides all fields marked `hideable` in the form schema. */
+  hide?: boolean;
 }
 
-export function FormPreviewModal({ fields }: FormPreviewModalProps) {
+export function FormPreviewModal({ fields, hide }: FormPreviewModalProps) {
   const { t, locale: currentLocale } = useFormKit();
 
   // Localize all fields based on site locale
   const localizedFields = useLocalizedFields(fields);
+  const effectiveFields = useMemo(
+    () => applyFieldVisibility(localizedFields, hide),
+    [localizedFields, hide],
+  );
 
   // Modal state - local state for preview visibility
   const [isOpen, setIsOpen] = useState(false);
@@ -98,8 +103,8 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
 
   // Create field map for formula evaluation
   const fieldMap = useMemo(
-    () => createFieldMap(localizedFields),
-    [localizedFields],
+    () => createFieldMap(effectiveFields),
+    [effectiveFields],
   );
 
   // Fetch dynamic options for a field
@@ -200,7 +205,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
 
   // Initialize form data when modal opens or fields change
   useEffect(() => {
-    if (!isOpen || localizedFields.length === 0) return;
+    if (!isOpen || effectiveFields.length === 0) return;
 
     const initialData: Record<string, any> = {};
 
@@ -254,18 +259,18 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
       });
     };
 
-    initializeFields(localizedFields);
+    initializeFields(effectiveFields);
     setFormData(initialData);
     setValidationErrors({});
     setTouchedFields({});
     setSubmitAttempted(false);
-  }, [isOpen, localizedFields]);
+  }, [isOpen, effectiveFields]);
 
   // Fetch dynamic options on mount
   useEffect(() => {
-    if (!isOpen || localizedFields.length === 0) return;
+    if (!isOpen || effectiveFields.length === 0) return;
 
-    const allFields = flattenFields(localizedFields);
+    const allFields = flattenFields(effectiveFields);
     const dynamicFields = allFields.filter(
       (f) =>
         ['select', 'multi_select', 'radio', 'checkbox'].includes(f.type) &&
@@ -275,14 +280,14 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
     );
 
     dynamicFields.forEach((field) => fetchDynamicOptions(field));
-  }, [isOpen, localizedFields, flattenFields, fetchDynamicOptions]);
+  }, [isOpen, effectiveFields, flattenFields, fetchDynamicOptions]);
 
   // Get dependent fields and their parent field IDs
   const dependentFieldsInfo = useMemo(() => {
-    if (localizedFields.length === 0)
+    if (effectiveFields.length === 0)
       return { dependentFields: [] as FormField[], parentIds: [] as string[] };
 
-    const allFields = flattenFields(localizedFields);
+    const allFields = flattenFields(effectiveFields);
     const dependentFields = allFields.filter(
       (f) =>
         ['select', 'multi_select', 'radio', 'checkbox'].includes(f.type) &&
@@ -294,12 +299,12 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
       new Set(dependentFields.map((f) => f.dataSource!.dependsOn!)),
     );
     return { dependentFields, parentIds };
-  }, [localizedFields, flattenFields]);
+  }, [effectiveFields, flattenFields]);
 
   // Form structure with grouped steps
   const formStructure = useMemo(() => {
-    return groupStepSections(localizedFields);
-  }, [localizedFields]);
+    return groupStepSections(effectiveFields);
+  }, [effectiveFields]);
 
   // Set active step group when modal opens or fields change
   useEffect(() => {
@@ -511,7 +516,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
         ? !!formData[field.dataSource!.dependsOn!]
         : true;
       const parentField = isDependent
-        ? localizedFields.find((f) => f.id === field.dataSource!.dependsOn!)
+        ? effectiveFields.find((f) => f.id === field.dataSource!.dependsOn!)
         : null;
 
       // For container fields (sections), render children
@@ -602,7 +607,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
       dynamicOptions,
       loadingFields,
       errorFields,
-      localizedFields,
+      effectiveFields,
       handleFieldChange,
       handleFieldBlur,
       fetchDynamicOptions,
@@ -668,7 +673,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
             errors: wizardResult.errors,
           };
         })()
-      : validateFormWithZod(localizedFields, formData);
+      : validateVisibleFields(effectiveFields, formData);
 
     if (result.isValid) {
       // Build complete form data with defaults
@@ -718,7 +723,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
         });
       };
 
-      processFields(localizedFields);
+      processFields(effectiveFields);
 
       // Create enhanced submission with actual form data
       // Use original fields (not localized) for consistency with form builder
@@ -768,7 +773,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
     setSubmitAttempted(false);
 
     // Re-initialize form data
-    if (localizedFields.length > 0) {
+    if (effectiveFields.length > 0) {
       const initialData: Record<string, any> = {};
       const initializeFields = (fieldList: FormField[]) => {
         fieldList.forEach((fld) => {
@@ -803,7 +808,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
           if (fld.fields) initializeFields(fld.fields);
         });
       };
-      initializeFields(localizedFields);
+      initializeFields(effectiveFields);
       setFormData(initialData);
     }
 
@@ -847,7 +852,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
           <div className='flex-1 min-h-0 overflow-visible'>
             <div className='max-w-7xl mx-auto py-8 px-6 max-h-full overflow-y-auto overscroll-contain'>
               <form onSubmit={handleFormSubmit} className='space-y-4'>
-                {localizedFields.length > 0 ? (
+                {effectiveFields.length > 0 ? (
                   formStructure.hasSteps &&
                   activeStepGroup &&
                   activeStepGroup.steps.length > 1 ? (
@@ -1017,7 +1022,7 @@ export function FormPreviewModal({ fields }: FormPreviewModalProps) {
                   ) : (
                     // Single-page form rendering (no multi-step or single step)
                     <>
-                      {localizedFields.map((field) => (
+                      {effectiveFields.map((field) => (
                         <div key={field.id}>{renderField(field)}</div>
                       ))}
                     </>

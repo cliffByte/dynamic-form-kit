@@ -202,6 +202,11 @@ export const FormFieldItem = React.memo(function FormFieldItem({
             Hidden
           </span>
         )}
+        {field.hideable && !field.isHidden && (
+          <span className='px-2 py-0.5 bg-muted/50 text-muted-foreground rounded'>
+            Hideable
+          </span>
+        )}
         {hasIncompleteConditionalRules && (
           <span
             className='px-2 py-0.5 bg-amber-100 text-amber-800 rounded flex items-center gap-1'

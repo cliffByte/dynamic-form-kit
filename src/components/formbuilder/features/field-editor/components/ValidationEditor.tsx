@@ -4,7 +4,6 @@ import React from 'react';
 import { FormField } from '../../../../../types/form';
 import { Input } from '../../../../ui/input';
 import { Label } from '../../../../ui/label';
-import { Badge } from '../../../../ui/badge';
 import { setLocalizedFieldValue } from '../../../../../lib/fieldLocalization';
 
 interface ValidationEditorProps {
@@ -64,14 +63,17 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
     return null;
   }
 
+  const isContainer = field.type === 'step_section' || field.type === 'ui_section';
+
   return (
     <div className='border-t pt-4 space-y-4'>
       <h4 className='text-sm font-medium text-gray-700'>
         Validation & Behavior
       </h4>
 
-      <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-        {/* Required */}
+      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+        {/* Required — leaf fields only */}
+        {!isContainer && (
         <div className='flex items-center gap-2'>
           <input
             type='checkbox'
@@ -80,10 +82,10 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
             onChange={(e) => {
               const checked = e.target.checked;
               if (checked) {
-                // If required is checked, cannot be hidden or disabled
                 updateField(field.id, {
                   required: true,
                   isHidden: false,
+                  hideable: false,
                   isDisabled: false,
                 });
               } else {
@@ -96,8 +98,8 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
             Required
           </Label>
         </div>
+        )}
 
-        {/* Hidden */}
         <div className='flex items-center gap-2'>
           <input
             type='checkbox'
@@ -106,8 +108,15 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
             onChange={(e) => {
               const checked = e.target.checked;
               if (checked) {
-                // If hidden is checked, cannot be required
-                updateField(field.id, { isHidden: true, required: false });
+                if (isContainer) {
+                  updateField(field.id, { isHidden: true, hideable: false });
+                } else {
+                  updateField(field.id, {
+                    isHidden: true,
+                    required: false,
+                    hideable: false,
+                  });
+                }
               } else {
                 updateField(field.id, { isHidden: false });
               }
@@ -119,7 +128,28 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
           </Label>
         </div>
 
-        {/* Disabled */}
+        <div className='flex items-center gap-2'>
+          <input
+            type='checkbox'
+            id='field-hideable'
+            checked={field.hideable || false}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              if (checked) {
+                updateField(field.id, { hideable: true, isHidden: false });
+              } else {
+                updateField(field.id, { hideable: false });
+              }
+            }}
+            className='w-4 h-4 rounded border-gray-300'
+          />
+          <Label htmlFor='field-hideable' className='cursor-pointer'>
+            Hideable
+          </Label>
+        </div>
+
+        {/* Disabled — leaf fields only */}
+        {!isContainer && (
         <div className='flex items-center gap-2'>
           <input
             type='checkbox'
@@ -140,6 +170,7 @@ export const ValidationEditor: React.FC<ValidationEditorProps> = ({
             Disabled
           </Label>
         </div>
+        )}
       </div>
 
       {/* Placeholder */}

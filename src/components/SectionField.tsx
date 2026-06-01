@@ -741,6 +741,11 @@ export const SectionField = React.memo(function SectionField({
             Hidden
           </span>
         )}
+        {field.hideable && !field.isHidden && (
+          <span className='text-muted-foreground bg-muted/50 px-2 py-0.5 rounded'>
+            Hideable
+          </span>
+        )}
         {hasIncompleteConditionalRules && (
           <span
             className='px-2 py-0.5 bg-amber-100 text-amber-800 rounded flex items-center gap-1'
