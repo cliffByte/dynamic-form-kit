@@ -484,12 +484,28 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
                   Step 1 · Depends On Field
                 </Label>
                 <Select
-                  value={field.dataSource?.dependsOn || ''}
-                  onValueChange={(val) =>
+                  value={
+                    field.dataSource?.dependsOn &&
+                    field.dataSource.dependsOn !== 'none'
+                      ? field.dataSource.dependsOn
+                      : 'none'
+                  }
+                  onValueChange={(val) => {
+                    if (val === 'none') {
+                      updateField(field.id, {
+                        dataSource: {
+                          ...field.dataSource!,
+                          dependsOn: undefined,
+                          parentValueParam: undefined,
+                          parentValuePath: undefined,
+                        },
+                      });
+                      return;
+                    }
                     updateField(field.id, {
                       dataSource: { ...field.dataSource!, dependsOn: val },
-                    })
-                  }>
+                    });
+                  }}>
                   <SelectTrigger className='h-8 text-xs'>
                     <SelectValue placeholder='Select parent field…' />
                   </SelectTrigger>

@@ -380,7 +380,8 @@ export function FormRenderer({
       if (!shouldShowField(field, values)) return null;
 
       const ds = field.dataSource;
-      const dependsOn = ds?.dependsOn;
+      const dependsOn =
+        ds?.dependsOn && ds.dependsOn !== 'none' ? ds.dependsOn : undefined;
       const parentValue = dependsOn ? values[dependsOn] : undefined;
       const isDependent = Boolean(dependsOn);
       const parentHasValue = isDependent

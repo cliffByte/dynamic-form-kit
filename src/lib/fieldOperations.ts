@@ -13,33 +13,87 @@ export function cloneFieldForTemplateSave(field: FormField): FormField {
  * Preserves uniqueIdentifier so saved templates keep their stable keys.
  */
 export function cloneFieldWithNewIds(field: FormField): FormField {
-  const newId = generateUUID();
-  const clonedField: FormField = {
-    ...field,
-    id: newId,
+  const idMap = new Map<string, string>();
+
+  const cloneAndMap = (f: FormField): FormField => {
+    const newId = generateUUID();
+    idMap.set(f.id, newId);
+
+    const cloned: FormField = {
+      ...f,
+      id: newId,
+    };
+
+    if (cloned.fields && Array.isArray(cloned.fields)) {
+      cloned.fields = cloned.fields.map((child) => cloneAndMap(child));
+    }
+
+    if (cloned.optionConfigs && Array.isArray(cloned.optionConfigs)) {
+      cloned.optionConfigs = cloned.optionConfigs.map((oc) => {
+        if (oc.nestedForm) {
+          return {
+            ...oc,
+            nestedForm: {
+              ...oc.nestedForm,
+              id: generateUUID(),
+              fields: oc.nestedForm.fields.map((nf) => cloneAndMap(nf)),
+            },
+          };
+        }
+        return oc;
+      });
+    }
+
+    return cloned;
   };
 
-  if (clonedField.fields && Array.isArray(clonedField.fields)) {
-    clonedField.fields = clonedField.fields.map((f) => cloneFieldWithNewIds(f));
-  }
-
-  if (clonedField.optionConfigs && Array.isArray(clonedField.optionConfigs)) {
-    clonedField.optionConfigs = clonedField.optionConfigs.map((oc) => {
-      if (oc.nestedForm) {
-        return {
-          ...oc,
-          nestedForm: {
-            ...oc.nestedForm,
-            id: generateUUID(),
-            fields: oc.nestedForm.fields.map((f) => cloneFieldWithNewIds(f)),
-          },
-        };
+  const remapDependencies = (f: FormField): FormField => {
+    const ds = f.dataSource;
+    const dependsOn = ds?.dependsOn;
+    if (ds && dependsOn && dependsOn !== 'none') {
+      const mapped = idMap.get(dependsOn);
+      if (mapped) {
+        f.dataSource = { ...ds, dependsOn: mapped };
       }
-      return oc;
-    });
-  }
+    }
 
-  return clonedField;
+    if (f.logic?.depends_on) {
+      const mapped = idMap.get(f.logic.depends_on);
+      if (mapped) {
+        f.logic = { ...f.logic, depends_on: mapped };
+      }
+    }
+
+    if (Array.isArray(f.conditionalRules)) {
+      f.conditionalRules = f.conditionalRules.map((r) => {
+        const mapped = idMap.get(r.fieldId);
+        return mapped ? { ...r, fieldId: mapped } : r;
+      });
+    }
+
+    if (f.fields && Array.isArray(f.fields)) {
+      f.fields = f.fields.map((child) => remapDependencies(child));
+    }
+
+    if (f.optionConfigs && Array.isArray(f.optionConfigs)) {
+      f.optionConfigs = f.optionConfigs.map((oc) => {
+        if (oc.nestedForm?.fields?.length) {
+          return {
+            ...oc,
+            nestedForm: {
+              ...oc.nestedForm,
+              fields: oc.nestedForm.fields.map((nf) => remapDependencies(nf)),
+            },
+          };
+        }
+        return oc;
+      });
+    }
+
+    return f;
+  };
+
+  return remapDependencies(cloneAndMap(field));
 }
 
 /**

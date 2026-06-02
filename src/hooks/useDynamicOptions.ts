@@ -32,7 +32,7 @@ export function useDynamicOptions(
     }
 
     // If depends on parent and no parent value, don't fetch
-    if (dataSource.dependsOn && !parentValue) {
+    if (dataSource.dependsOn && dataSource.dependsOn !== 'none' && !parentValue) {
       setOptions([]);
       return;
     }

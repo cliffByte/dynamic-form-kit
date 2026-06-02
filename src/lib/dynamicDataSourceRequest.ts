@@ -13,6 +13,7 @@ export function buildDynamicDataSourceRequest(
 ): { url: string; init: RequestInit } {
   let url = ds.url;
   const method = ds.method || 'GET';
+  const hasParentField = Boolean(ds.dependsOn && ds.dependsOn !== 'none');
   const hasParent =
     parentValue !== undefined && parentValue !== null && parentValue !== '';
 
@@ -29,13 +30,13 @@ export function buildDynamicDataSourceRequest(
 
   if (method === 'POST') {
     const body: Record<string, unknown> = { ...(ds.body ?? {}) };
-    if (ds.dependsOn && ds.parentValueParam && hasParent) {
+    if (hasParentField && ds.parentValueParam && hasParent) {
       body[ds.parentValueParam] = parentValue;
     }
     if (Object.keys(body).length > 0) {
       init.body = JSON.stringify(body);
     }
-  } else if (ds.dependsOn && ds.parentValueParam && hasParent) {
+  } else if (hasParentField && ds.parentValueParam && hasParent) {
     try {
       const urlObj = new URL(url);
       urlObj.searchParams.append(ds.parentValueParam, String(parentValue));
