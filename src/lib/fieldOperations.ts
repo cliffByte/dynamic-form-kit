@@ -2,14 +2,21 @@ import { FormField } from '../types/form';
 import { generateUUID } from './utils';
 
 /**
- * Deep clones a field and all its descendants with new IDs
+ * Deep-clones a field tree for template persistence (preserves unique keys).
+ */
+export function cloneFieldForTemplateSave(field: FormField): FormField {
+  return structuredClone(field);
+}
+
+/**
+ * Deep clones a field and all its descendants with new IDs.
+ * Preserves uniqueIdentifier so saved templates keep their stable keys.
  */
 export function cloneFieldWithNewIds(field: FormField): FormField {
   const newId = generateUUID();
   const clonedField: FormField = {
     ...field,
     id: newId,
-    uniqueIdentifier: undefined,
   };
 
   if (clonedField.fields && Array.isArray(clonedField.fields)) {

@@ -14,6 +14,11 @@ import { Label } from './ui/label';
 import { FormField } from '../types/form';
 import { useFormKit } from '../context/FormKitContext';
 import { toast } from 'sonner';
+import { useFormBuilderStore } from './formbuilder/store/useFormBuilderStore';
+import {
+  cloneFieldForTemplateSave,
+  findFieldById,
+} from '../lib/fieldOperations';
 
 interface TemplateSaveDialogProps {
   isOpen: boolean;
@@ -39,10 +44,14 @@ export function TemplateSaveDialog({
 
     setIsSaving(true);
     try {
+      const { fields } = useFormBuilderStore.getState();
+      const latestField = findFieldById(fields, field.id) ?? field;
+      const schema = cloneFieldForTemplateSave(latestField);
+
       await saveFormTemplate({
         name: { en: name },
         description: { en: description },
-        schema: field,
+        schema,
       });
       window.dispatchEvent(new CustomEvent('template-saved'));
       onClose();
