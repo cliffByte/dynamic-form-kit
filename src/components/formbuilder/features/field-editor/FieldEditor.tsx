@@ -10,6 +10,7 @@ import {
   useFormBuilderStore,
   FormBuilderState,
 } from '../../store/useFormBuilderStore';
+import { useFormBuilderSync } from '../../FormBuilderSyncContext';
 import { useShallow } from 'zustand/react/shallow';
 import { getLanguageName } from '../../../../lib/languageList';
 import { TemplateSaveDialog } from '../../../TemplateSaveDialog';
@@ -59,6 +60,7 @@ const FieldEditorComponent = React.memo(function FieldEditor(
 
   const field = props.field !== undefined ? props.field : selectedField;
   const allFields = props.allFields ?? allFieldsInStore;
+  const formBuilderSync = useFormBuilderSync();
 
   const updateField = useCallback(
     (_id: string, updates: Partial<FormField>) => {
@@ -164,10 +166,18 @@ const FieldEditorComponent = React.memo(function FieldEditor(
 
   const availableFields = useMemo(() => {
     const flatten = (list: FormField[]): FormField[] => {
-      let res: FormField[] = [];
+      const res: FormField[] = [];
       list.forEach((f) => {
         res.push(f);
-        if (f.fields) res.push(...flatten(f.fields));
+        if (f.fields?.length) res.push(...flatten(f.fields));
+        // Include fields inside option nested-forms (so cascading can depend on them too)
+        if (f.optionConfigs?.length) {
+          for (const oc of f.optionConfigs) {
+            if (oc.nestedForm?.fields?.length) {
+              res.push(...flatten(oc.nestedForm.fields));
+            }
+          }
+        }
       });
       return res;
     };
@@ -269,6 +279,7 @@ const FieldEditorComponent = React.memo(function FieldEditor(
           field={field}
           editingLocale={editingLocale}
           updateField={updateField}
+          onCascadeChange={formBuilderSync?.flushSchemaToExternal}
           options={options}
           setOptions={setOptions}
           optionConfigs={optionConfigs}

@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FormField, OptionConfig, NestedForm } from '../../../../../types/form';
+import {
+  DynamicDataSource,
+  FormField,
+  OptionConfig,
+  NestedForm,
+} from '../../../../../types/form';
 import { Button } from '../../../../ui/button';
 import { Input } from '../../../../ui/input';
 import { Label } from '../../../../ui/label';
@@ -38,7 +43,15 @@ interface ChoiceOptionsEditorProps {
   onOpenNestedForm: (index: number, nestedForm: NestedForm | null) => void;
   removeNestedForm: (index: number) => void;
   updateNestedFormName: (index: number, name: string) => void;
+  /** Flush store schema to parent immediately after cascade link edits. */
+  onCascadeChange?: () => void;
 }
+
+const CASCADE_DATA_SOURCE_KEYS = [
+  'dependsOn',
+  'parentValueParam',
+  'parentValuePath',
+] as const;
 
 export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
   field,
@@ -54,9 +67,145 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
   onOpenNestedForm,
   removeNestedForm,
   updateNestedFormName,
+  onCascadeChange,
 }) => {
   const isEn = editingLocale === 'en';
   const isPost = (field.dataSource?.method || 'GET') === 'POST';
+  const defaultDynamicDataSource = React.useMemo(
+    () => ({
+      url: '',
+      path: '',
+      valueField: 'id',
+      labelField: 'name',
+    }),
+    [],
+  );
+
+  const dataSourceInitRef = React.useRef<string | null>(null);
+  const dependsOnRestoreAttemptedRef = React.useRef<Record<string, boolean>>(
+    {},
+  );
+  const lastNonNullDataSourceByIdRef = React.useRef<
+    Record<string, DynamicDataSource>
+  >({});
+
+  const patchDataSource = React.useCallback(
+    (patch: Partial<DynamicDataSource>) => {
+      // mergeFieldUpdate deep-merges this patch into the latest store field.dataSource
+      updateField(field.id, {
+        dataSource: patch as DynamicDataSource,
+      });
+      if (Object.prototype.hasOwnProperty.call(patch, 'dependsOn')) {
+        const base =
+          lastNonNullDataSourceByIdRef.current[field.id] ??
+          field.dataSource ??
+          {};
+        const merged: DynamicDataSource = { ...base, ...patch };
+        if (patch.dependsOn === undefined) {
+          delete (merged as { dependsOn?: string }).dependsOn;
+        }
+        lastNonNullDataSourceByIdRef.current[field.id] = merged;
+      }
+      if (
+        onCascadeChange &&
+        CASCADE_DATA_SOURCE_KEYS.some((key) =>
+          Object.prototype.hasOwnProperty.call(patch, key),
+        )
+      ) {
+        onCascadeChange();
+      }
+    },
+    [field.id, field.dataSource, updateField, onCascadeChange],
+  );
+
+  // Initialize dataSource once per field when dynamic is enabled (avoid re-init wiping dependsOn).
+  useEffect(() => {
+    dataSourceInitRef.current = null;
+    delete dependsOnRestoreAttemptedRef.current[field.id];
+  }, [field.id]);
+
+  const hasCascadeStep2Config = Boolean(
+    field.dataSource?.parentValuePath || field.dataSource?.parentValueParam,
+  );
+
+  const effectiveDependsOn = React.useMemo(() => {
+    const current = field.dataSource?.dependsOn;
+    if (current && current !== 'none') return current;
+    const remembered = lastNonNullDataSourceByIdRef.current[field.id]?.dependsOn;
+    if (remembered && remembered !== 'none' && hasCascadeStep2Config) {
+      return remembered;
+    }
+    return undefined;
+  }, [
+    field.id,
+    field.dataSource?.dependsOn,
+    field.dataSource?.parentValuePath,
+    field.dataSource?.parentValueParam,
+    hasCascadeStep2Config,
+  ]);
+
+  // Remember last known good dataSource per field id (merge; never drop dependsOn while step 2 exists).
+  useEffect(() => {
+    if (!field.dataSource) return;
+    const prev = lastNonNullDataSourceByIdRef.current[field.id];
+    const merged: DynamicDataSource = { ...prev, ...field.dataSource };
+    if (
+      prev?.dependsOn &&
+      prev.dependsOn !== 'none' &&
+      field.dataSource.dependsOn === undefined &&
+      (field.dataSource.parentValuePath || field.dataSource.parentValueParam)
+    ) {
+      merged.dependsOn = prev.dependsOn;
+    }
+    lastNonNullDataSourceByIdRef.current[field.id] = merged;
+  }, [field.id, field.dataSource]);
+
+  // Restore dependsOn if a stale sync stripped the link but step 2 / remembered config remains.
+  useEffect(() => {
+    if (!field.isDynamic || !field.dataSource) return;
+    const remembered = lastNonNullDataSourceByIdRef.current[field.id];
+    const rememberedDepends = remembered?.dependsOn;
+    if (
+      !rememberedDepends ||
+      rememberedDepends === 'none' ||
+      field.dataSource.dependsOn === rememberedDepends
+    ) {
+      if (field.dataSource.dependsOn) {
+        delete dependsOnRestoreAttemptedRef.current[field.id];
+      }
+      return;
+    }
+    if (dependsOnRestoreAttemptedRef.current[field.id]) return;
+    if (
+      field.dataSource.dependsOn === undefined &&
+      (field.dataSource.parentValuePath ||
+        field.dataSource.parentValueParam ||
+        remembered?.parentValuePath ||
+        remembered?.parentValueParam)
+    ) {
+      dependsOnRestoreAttemptedRef.current[field.id] = true;
+      patchDataSource({ dependsOn: rememberedDepends });
+    }
+  }, [
+    field.id,
+    field.isDynamic,
+    field.dataSource,
+    field.dataSource?.dependsOn,
+    field.dataSource?.parentValuePath,
+    field.dataSource?.parentValueParam,
+    patchDataSource,
+  ]);
+
+  useEffect(() => {
+    if (!field.isDynamic || field.dataSource) return;
+    if (dataSourceInitRef.current === field.id) return;
+    dataSourceInitRef.current = field.id;
+    const restoredDataSource =
+      lastNonNullDataSourceByIdRef.current[field.id];
+    updateField(field.id, {
+      dataSource: restoredDataSource ?? defaultDynamicDataSource,
+    });
+  }, [field.id, field.isDynamic, field.dataSource, updateField, defaultDynamicDataSource]);
   const [bodyText, setBodyText] = useState(() =>
     formatDataSourceBody(field.dataSource?.body),
   );
@@ -68,15 +217,14 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
   }, [field.id, field.dataSource?.body]);
 
   const commitBody = (text: string) => {
+    if (!field.dataSource) return;
     const result = parseDataSourceBody(text);
     if (!result.ok) {
       setBodyError(result.error);
       return;
     }
     setBodyError(null);
-    updateField(field.id, {
-      dataSource: { ...field.dataSource!, body: result.body },
-    });
+    patchDataSource({ body: result.body });
   };
 
   const needsOptions = [
@@ -277,12 +425,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
             onClick={() =>
               updateField(field.id, {
                 isDynamic: true,
-                dataSource: {
-                  url: '',
-                  path: '',
-                  valueField: 'id',
-                  labelField: 'name',
-                },
+                dataSource: field.dataSource ?? defaultDynamicDataSource,
               })
             }
             className='h-7 px-3 text-xs'>
@@ -348,11 +491,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
               <Label className='text-xs font-semibold'>HTTP Method</Label>
               <Select
                 value={field.dataSource?.method || 'GET'}
-                onValueChange={(val: 'GET' | 'POST') =>
-                  updateField(field.id, {
-                    dataSource: { ...field.dataSource!, method: val },
-                  })
-                }>
+                onValueChange={(val: 'GET' | 'POST') => patchDataSource({ method: val })}>
                 <SelectTrigger className='h-8 text-sm'>
                   <SelectValue />
                 </SelectTrigger>
@@ -366,11 +505,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
               <Label className='text-xs font-semibold'>Data Source URL</Label>
               <Input
                 value={field.dataSource?.url || ''}
-                onChange={(e) =>
-                  updateField(field.id, {
-                    dataSource: { ...field.dataSource!, url: e.target.value },
-                  })
-                }
+                onChange={(e) => patchDataSource({ url: e.target.value })}
                 placeholder='https://api.example.com/options'
                 className='h-8 text-sm'
               />
@@ -411,11 +546,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
             <Label className='text-xs font-semibold'>JSON Response Path</Label>
             <Input
               value={field.dataSource?.path || ''}
-              onChange={(e) =>
-                updateField(field.id, {
-                  dataSource: { ...field.dataSource!, path: e.target.value },
-                })
-              }
+              onChange={(e) => patchDataSource({ path: e.target.value })}
               placeholder='data.items or list'
               className='h-8 text-sm'
             />
@@ -431,14 +562,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
               </Label>
               <Input
                 value={field.dataSource?.labelField || 'name'}
-                onChange={(e) =>
-                  updateField(field.id, {
-                    dataSource: {
-                      ...field.dataSource!,
-                      labelField: e.target.value,
-                    },
-                  })
-                }
+                onChange={(e) => patchDataSource({ labelField: e.target.value })}
                 placeholder='name'
                 className='h-8 text-xs'
               />
@@ -449,14 +573,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
               </Label>
               <Input
                 value={field.dataSource?.valueField || 'id'}
-                onChange={(e) =>
-                  updateField(field.id, {
-                    dataSource: {
-                      ...field.dataSource!,
-                      valueField: e.target.value,
-                    },
-                  })
-                }
+                onChange={(e) => patchDataSource({ valueField: e.target.value })}
                 placeholder='id'
                 className='h-8 text-xs'
               />
@@ -483,34 +600,41 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
                 <Label className='text-[10px] uppercase text-muted-foreground'>
                   Step 1 · Depends On Field
                 </Label>
+                {/*
+                  Note: Radix Select will appear "blank" if its value isn't present in the items list.
+                  When a saved dependsOn points to a field that isn't in availableFields (e.g. nested/moved),
+                  we still include a fallback item so the parent doesn't look like it was removed.
+                */}
                 <Select
-                  value={
-                    field.dataSource?.dependsOn &&
-                    field.dataSource.dependsOn !== 'none'
-                      ? field.dataSource.dependsOn
-                      : 'none'
-                  }
+                  key={`depends-on-${field.id}-${effectiveDependsOn ?? 'none'}`}
+                  value={effectiveDependsOn ?? 'none'}
                   onValueChange={(val) => {
                     if (val === 'none') {
-                      updateField(field.id, {
-                        dataSource: {
-                          ...field.dataSource!,
-                          dependsOn: undefined,
-                          parentValueParam: undefined,
-                          parentValuePath: undefined,
-                        },
+                      // Ignore spurious Radix reset while step 2 is still configured
+                      if (hasCascadeStep2Config && effectiveDependsOn) {
+                        return;
+                      }
+                      patchDataSource({
+                        dependsOn: undefined,
+                        parentValueParam: undefined,
+                        parentValuePath: undefined,
                       });
                       return;
                     }
-                    updateField(field.id, {
-                      dataSource: { ...field.dataSource!, dependsOn: val },
-                    });
+                    if (effectiveDependsOn === val) return;
+                    patchDataSource({ dependsOn: val });
                   }}>
                   <SelectTrigger className='h-8 text-xs'>
                     <SelectValue placeholder='Select parent field…' />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value='none'>None (not dependent)</SelectItem>
+                    {effectiveDependsOn &&
+                      !availableFields.some((f) => f.id === effectiveDependsOn) && (
+                        <SelectItem value={effectiveDependsOn}>
+                          {`Missing field: ${effectiveDependsOn}`}
+                        </SelectItem>
+                      )}
                     {availableFields.map((f) => (
                       <SelectItem key={f.id} value={f.id}>
                         {f.label || f.id}
@@ -520,8 +644,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
                 </Select>
               </div>
 
-              {field.dataSource?.dependsOn &&
-                field.dataSource.dependsOn !== 'none' && (
+              {effectiveDependsOn && (
                   <div className='space-y-3 p-2.5 bg-blue-50/60 border border-blue-200/60 rounded-lg'>
                     {/* How-it-works hint, changes by method */}
                     {(field.dataSource?.method || 'GET') === 'GET' ? (
@@ -583,12 +706,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
                         <Input
                           value={field.dataSource?.parentValuePath || ''}
                           onChange={(e) =>
-                            updateField(field.id, {
-                              dataSource: {
-                                ...field.dataSource!,
-                                parentValuePath: e.target.value,
-                              },
-                            })
+                            patchDataSource({ parentValuePath: e.target.value })
                           }
                           placeholder='catId'
                           className='h-8 text-xs font-mono'
@@ -646,12 +764,7 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
                         <Input
                           value={field.dataSource?.parentValueParam || ''}
                           onChange={(e) =>
-                            updateField(field.id, {
-                              dataSource: {
-                                ...field.dataSource!,
-                                parentValueParam: e.target.value,
-                              },
-                            })
+                            patchDataSource({ parentValueParam: e.target.value })
                           }
                           placeholder='categoryId'
                           className='h-8 text-xs font-mono'

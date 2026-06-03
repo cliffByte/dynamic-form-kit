@@ -12,8 +12,10 @@ import { EnhancedFormSubmission } from '../types/submission';
 import { useFormBuilderStore } from './formbuilder/store/useFormBuilderStore';
 import { cn, formatNumberByLocale } from '../lib/utils';
 import { useLocalizedFields } from '../hooks/useLocalizedField';
-import { getNestedValue } from '../hooks/useDynamicOptions';
-import { buildDynamicDataSourceRequest } from '../lib/dynamicDataSourceRequest';
+import {
+  fetchDynamicOptionsForField,
+  getDynamicParentFieldId,
+} from '../lib/dynamicFieldUtils';
 import { getLanguagesWithNames } from '../lib/formLanguages';
 import { useFormKit } from '../context/FormKitContext';
 import { toast } from 'sonner';
@@ -117,49 +119,17 @@ export function FormPreviewModal({ fields, hide }: FormPreviewModalProps) {
       setErrorFields((prev) => ({ ...prev, [field.id]: '' }));
 
       try {
-        const parentValue = field.dataSource.dependsOn
-          ? formDataRef.current[field.dataSource.dependsOn]
+        const parentId = getDynamicParentFieldId(field.dataSource);
+        const parentValue = parentId
+          ? formDataRef.current[parentId]
           : undefined;
 
-        if (field.dataSource.dependsOn && !parentValue) {
+        if (parentId && !parentValue) {
           setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
-          setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
           return;
         }
 
-        const { url, init: fetchOptions } = buildDynamicDataSourceRequest(
-          field.dataSource,
-          parentValue,
-        );
-
-        const response = await fetch(url, fetchOptions);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        let data = await response.json();
-
-        if (field.dataSource.path) {
-          const pathParts = field.dataSource.path.split('.');
-          for (const part of pathParts) {
-            data = data[part];
-          }
-        }
-
-        if (!Array.isArray(data)) {
-          throw new Error('Response is not an array');
-        }
-
-        const options: DynamicOption[] = data.map((item: any) => ({
-          value: field.dataSource!.valueField
-            ? String(getNestedValue(item, field.dataSource!.valueField) ?? item)
-            : String(item),
-          label: field.dataSource!.labelField
-            ? String(getNestedValue(item, field.dataSource!.labelField) ?? item)
-            : String(item),
-        }));
-
+        const options = await fetchDynamicOptionsForField(field, parentValue);
         setDynamicOptions((prev) => ({ ...prev, [field.id]: options }));
       } catch (err) {
         setErrorFields((prev) => ({
@@ -171,7 +141,7 @@ export function FormPreviewModal({ fields, hide }: FormPreviewModalProps) {
         setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
       }
     },
-    [], // No dependencies - uses ref for formData
+    [],
   );
 
   // Initialize form data when modal opens or fields change
@@ -247,7 +217,7 @@ export function FormPreviewModal({ fields, hide }: FormPreviewModalProps) {
         ['select', 'multi_select', 'radio', 'checkbox'].includes(f.type) &&
         f.isDynamic &&
         f.dataSource?.url &&
-        !f.dataSource?.dependsOn,
+        !getDynamicParentFieldId(f.dataSource),
     );
 
     dynamicFields.forEach((field) => fetchDynamicOptions(field));

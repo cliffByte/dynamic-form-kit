@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useRef } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Plus } from 'lucide-react';
@@ -19,8 +19,12 @@ import {
 import { SubmissionDataModal } from '../SubmissionDataModal';
 import { createEnhancedSubmission } from '../../lib/formUtils';
 import { canAddToRoot } from '../../lib/dragDropUtils';
-import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { reconcileSchemaPreserveCascades } from '../../lib/fieldOperations';
+import {
+  FormBuilderSyncContext,
+  useFormBuilderSync,
+} from './FormBuilderSyncContext';
 
 const FieldEditorLazy = React.lazy(() =>
   import('./features/field-editor/FieldEditor').then((mod) => ({
@@ -35,6 +39,7 @@ interface FormBuilderProps {
 
 // Inner component that uses DndProvider context
 function FormCanvasWithDrop() {
+  const sync = useFormBuilderSync();
   const {
     fields,
     selectedFieldId,
@@ -131,7 +136,7 @@ function FormCanvasWithDrop() {
         <FormCanvas
           fields={fields}
           selectedFieldId={selectedFieldId}
-          onFieldSelect={selectField}
+          onFieldSelect={sync?.selectFieldWithFlush ?? selectField}
           onFieldUpdate={updateField}
           onFieldDelete={deleteField}
           onFieldMove={moveField}
@@ -192,6 +197,7 @@ export const FormBuilder = React.memo(function FormBuilder({
     (state) => state.setEnhancedSubmission,
   );
   const fields = useFormBuilderStore((state) => state.fields);
+  const selectField = useFormBuilderStore((state) => state.selectField);
 
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
 
@@ -199,13 +205,80 @@ export const FormBuilder = React.memo(function FormBuilder({
   const isSyncingFromExternal = useRef(false);
   const isSyncingToExternal = useRef(false);
   const lastExternalFieldsRef = useRef<string>('');
+  const debounceSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Sync store → parent only after the user pauses editing (matches session draft timing). */
+  const SYNC_TO_EXTERNAL_DEBOUNCE_MS = 5000;
+
+  const flushStoreToExternal = useCallback(() => {
+    if (debounceSyncRef.current) {
+      clearTimeout(debounceSyncRef.current);
+      debounceSyncRef.current = null;
+    }
+    if (isSyncingFromExternal.current) return;
+
+    const currentFields = useFormBuilderStore.getState().fields;
+    const fieldsJson = JSON.stringify(currentFields);
+    if (
+      currentFields.length === 0 ||
+      fieldsJson === lastExternalFieldsRef.current
+    ) {
+      return;
+    }
+
+    isSyncingToExternal.current = true;
+    lastExternalFieldsRef.current = fieldsJson;
+    externalSetFields(currentFields);
+
+    setTimeout(() => {
+      isSyncingToExternal.current = false;
+    }, 100);
+  }, [externalSetFields]);
+
+  const selectFieldWithFlush = useCallback(
+    (fieldId: string) => {
+      flushStoreToExternal();
+      selectField(fieldId);
+    },
+    [flushStoreToExternal, selectField],
+  );
+
+  const syncContextValue = useMemo(
+    () => ({
+      flushSchemaToExternal: flushStoreToExternal,
+      selectFieldWithFlush,
+    }),
+    [flushStoreToExternal, selectFieldWithFlush],
+  );
 
   // Synchronize external fields with store
   useEffect(() => {
+    const debug =
+      typeof window !== 'undefined' && Boolean((window as any).__FORM_BUILDER_DEBUG__);
+
     // 1. Skip if the parent update was triggered by us (isSyncingToExternal is true)
     if (isSyncingToExternal.current) return;
 
     const externalFieldsJson = JSON.stringify(externalFields || []);
+    const storeFieldsJson = JSON.stringify(fields || []);
+
+    // IMPORTANT:
+    // If the store has diverged from the last known external snapshot, do NOT
+    // sync external -> store. This prevents stale external schema (React Hook Form)
+    // from overwriting in-progress edits when the user quickly switches selection.
+    //
+    // This was causing cascading `dataSource.dependsOn` to "disappear" depending on
+    // click order (parent -> child vs parent -> parent), because externalFields was
+    // still the previous value until our debounced store -> external sync ran.
+    const storeHasUnsyncedChanges =
+      (fields.length > 0 && storeFieldsJson !== externalFieldsJson) ||
+      (lastExternalFieldsRef.current !== '' &&
+        storeFieldsJson !== lastExternalFieldsRef.current);
+    if (storeHasUnsyncedChanges) {
+      if (debug) {
+        console.debug('[FormBuilder][sync skip] external -> store (unsynced store changes)');
+      }
+      return;
+    }
 
     // 2. Only proceed if external data actually changed compared to our last known state
     if (externalFieldsJson !== lastExternalFieldsRef.current) {
@@ -225,9 +298,13 @@ export const FormBuilder = React.memo(function FormBuilder({
         lastExternalFieldsRef.current = '[]';
       } else {
         // Parent has data, sync it to our store
+        if (debug) {
+          console.debug('[FormBuilder][sync] external -> store');
+        }
         lastExternalFieldsRef.current = externalFieldsJson;
         isSyncingFromExternal.current = true;
-        setFields(externalFields);
+        // Reconcile to prevent stale external schema from wiping cascade links.
+        setFields(reconcileSchemaPreserveCascades(fields, externalFields));
 
         // Use a short timeout to clear the flag to allow state to settle
         const tid = setTimeout(() => {
@@ -238,7 +315,7 @@ export const FormBuilder = React.memo(function FormBuilder({
     }
   }, [externalFields, fields.length]); // Minimize dependencies
 
-  // Synchronize store back to parent
+  // Synchronize store back to parent (debounced; use flushStoreToExternal for urgent sync)
   useEffect(() => {
     // 1. Skip if we are currently receiving an update from the parent
     if (isSyncingFromExternal.current) return;
@@ -251,28 +328,22 @@ export const FormBuilder = React.memo(function FormBuilder({
       isSyncingToExternal.current = true;
 
       // Debounce updates to the parent to prevent lagging and loop pressure
-      const timeoutId = setTimeout(() => {
-        // Ensure flag is still valid after wait
-        if (isSyncingFromExternal.current) {
-          isSyncingToExternal.current = false;
-          return;
-        }
-
-        // Update ref before calling parent to "claim" this state as our last known
-        lastExternalFieldsRef.current = fieldsJson;
-
-        externalSetFields(fields);
-
-        // Reset the "sending" flag after parent has had time to re-render
-        const tid = setTimeout(() => {
-          isSyncingToExternal.current = false;
-        }, 100);
-      }, 300);
+      if (debounceSyncRef.current) {
+        clearTimeout(debounceSyncRef.current);
+      }
+      debounceSyncRef.current = setTimeout(() => {
+        debounceSyncRef.current = null;
+        flushStoreToExternal();
+      }, SYNC_TO_EXTERNAL_DEBOUNCE_MS);
 
       return () => {
-        clearTimeout(timeoutId);
-        // If we clear before timeout fired, we're still effectively "syncing" (waiting to sync)
-        // so we don't want to accept incoming changes that might be older than our pending change
+        if (debounceSyncRef.current) {
+          clearTimeout(debounceSyncRef.current);
+          debounceSyncRef.current = null;
+        }
+        // Allow a newer pending sync to run; avoid leaving the flag stuck true which
+        // blocks outbound sync and lets stale external schema overwrite the store.
+        isSyncingToExternal.current = false;
       };
     } else if (
       fields.length === 0 &&
@@ -282,7 +353,7 @@ export const FormBuilder = React.memo(function FormBuilder({
       // Handle empty fields case if needed
       isSyncingToExternal.current = false;
     }
-  }, [fields, externalSetFields]);
+  }, [fields, flushStoreToExternal]);
 
   const handleGenerateFormData = () => {
     const submission = createEnhancedSubmission(fields);
@@ -329,6 +400,7 @@ export const FormBuilder = React.memo(function FormBuilder({
 
   return (
     <FormKitRoot>
+    <FormBuilderSyncContext.Provider value={syncContextValue}>
     <DndProvider backend={HTML5Backend}>
       <div className='flex flex-col gap-4 h-[calc(100vh-150px)]'>
         {/* Main Grid */}
@@ -365,6 +437,7 @@ export const FormBuilder = React.memo(function FormBuilder({
         enhancedSubmission={enhancedSubmission}
       />
     </DndProvider>
+    </FormBuilderSyncContext.Provider>
     </FormKitRoot>
   );
 });

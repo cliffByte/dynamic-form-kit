@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DynamicDataSource } from '../types/form';
 import { buildDynamicDataSourceRequest } from '../lib/dynamicDataSourceRequest';
+import { mapResponseToDynamicOptions } from '../lib/dynamicFieldUtils';
 
 interface UseDynamicOptionsResult {
   options: Array<{ value: string; label: string }>;
@@ -53,20 +54,7 @@ export function useDynamicOptions(
       }
 
       const data = await response.json();
-
-      // Extract data using path (e.g., "data.list" or "items")
-      const extractedData = getNestedValue(data, dataSource.path);
-
-      if (!Array.isArray(extractedData)) {
-        throw new Error('Extracted data is not an array');
-      }
-
-      // Map to options format
-      const mappedOptions = extractedData.map((item: any) => ({
-        value: String(getNestedValue(item, dataSource.valueField) ?? ''),
-        label: String(getNestedValue(item, dataSource.labelField) ?? ''),
-      }));
-
+      const mappedOptions = mapResponseToDynamicOptions(data, dataSource);
       setOptions(mappedOptions);
     } catch (err) {
       const errorMessage =

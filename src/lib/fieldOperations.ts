@@ -322,6 +322,140 @@ export function findFieldById(
 }
 
 /**
+ * Merge a partial field update, deep-merging dataSource so cascading config
+ * (dependsOn, parentValueParam, etc.) is not lost by concurrent partial updates.
+ */
+export function mergeFieldUpdate(
+  field: FormField,
+  updates: Partial<FormField>,
+): FormField {
+  if (updates.dataSource === undefined) {
+    return { ...field, ...updates };
+  }
+
+  const hasOwn = (obj: object, key: string) =>
+    Object.prototype.hasOwnProperty.call(obj, key);
+
+  const nextDataSource =
+    updates.dataSource === null
+      ? undefined
+      : {
+          ...(field.dataSource ?? {}),
+          ...updates.dataSource,
+        };
+
+  // Hard guarantee: do NOT clear cascading links unless explicitly requested.
+  // Some stale sync paths were effectively replacing a field with a dataSource object
+  // that omits dependsOn; deep-merge handles that, but we also guard explicit undefined.
+  if (
+    field.dataSource?.dependsOn !== undefined &&
+    updates.dataSource &&
+    hasOwn(updates.dataSource as object, 'dependsOn') &&
+    (updates.dataSource as any).dependsOn === undefined
+  ) {
+    // allow explicit clear (user chose "None")
+  } else if (
+    field.dataSource?.dependsOn !== undefined &&
+    nextDataSource &&
+    (nextDataSource as any).dependsOn === undefined
+  ) {
+    (nextDataSource as any).dependsOn = field.dataSource?.dependsOn;
+  }
+
+  // Orphan cascade: parentValuePath/param kept but dependsOn dropped by stale sync
+  if (
+    field.dataSource?.dependsOn !== undefined &&
+    nextDataSource &&
+    (nextDataSource as any).dependsOn === undefined &&
+    ((nextDataSource as any).parentValuePath ||
+      (nextDataSource as any).parentValueParam)
+  ) {
+    (nextDataSource as any).dependsOn = field.dataSource.dependsOn;
+  }
+
+  return {
+    ...field,
+    ...updates,
+    dataSource: nextDataSource,
+  };
+}
+
+/**
+ * Reconcile a potentially-stale incoming schema with the current one.
+ * Goal: preserve cascading (`dataSource.dependsOn`) unless the incoming schema
+ * explicitly sets it (including explicit clear via dependsOn: undefined).
+ */
+export function reconcileSchemaPreserveCascades(
+  current: FormField[],
+  incoming: FormField[],
+): FormField[] {
+  const byId = new Map<string, FormField>();
+  const index = (list: FormField[]) => {
+    for (const f of list) {
+      byId.set(f.id, f);
+      if (f.fields?.length) index(f.fields);
+      if (f.optionConfigs?.length) {
+        for (const oc of f.optionConfigs) {
+          if (oc.nestedForm?.fields?.length) index(oc.nestedForm.fields);
+        }
+      }
+    }
+  };
+  index(current);
+
+  const hasOwn = (obj: object, key: string) =>
+    Object.prototype.hasOwnProperty.call(obj, key);
+
+  const walk = (list: FormField[]): FormField[] =>
+    list.map((f) => {
+      const prev = byId.get(f.id);
+      let next = { ...f } as FormField;
+
+      if (
+        prev?.dataSource?.dependsOn !== undefined &&
+        next.dataSource &&
+        !hasOwn(next.dataSource as object, 'dependsOn')
+      ) {
+        next.dataSource = { ...(next.dataSource as any), dependsOn: prev.dataSource.dependsOn };
+      }
+
+      if (
+        prev?.dataSource?.dependsOn !== undefined &&
+        next.dataSource &&
+        hasOwn(next.dataSource as object, 'dependsOn') &&
+        (next.dataSource as any).dependsOn === undefined &&
+        ((next.dataSource as any).parentValuePath ||
+          (next.dataSource as any).parentValueParam)
+      ) {
+        next.dataSource = { ...(next.dataSource as any), dependsOn: prev.dataSource.dependsOn };
+      }
+
+      if (prev?.dataSource?.dependsOn !== undefined && !next.dataSource && prev.dataSource) {
+        // incoming lost dataSource entirely; keep previous (safer than wiping)
+        next.dataSource = prev.dataSource;
+      }
+
+      if (next.fields?.length) next.fields = walk(next.fields);
+      if (next.optionConfigs?.length) {
+        next.optionConfigs = next.optionConfigs.map((oc) => {
+          if (!oc.nestedForm?.fields?.length) return oc;
+          return {
+            ...oc,
+            nestedForm: {
+              ...oc.nestedForm,
+              fields: walk(oc.nestedForm.fields),
+            },
+          };
+        });
+      }
+
+      return next;
+    });
+
+  return walk(incoming);
+}
+
+/**
  * Recursively update a field by ID
  * Single responsibility: Field update
  */
@@ -332,17 +466,35 @@ export function updateFieldById(
 ): FormField[] {
   return fields.map((field) => {
     if (field.id === targetId) {
-      return { ...field, ...updates };
+      return mergeFieldUpdate(field, updates);
     }
 
+    let nextField = field;
+
     if (isContainerField(field) && field.fields) {
-      return {
+      nextField = {
         ...field,
         fields: updateFieldById(field.fields, targetId, updates),
       };
     }
 
-    return field;
+    if (field.optionConfigs?.length) {
+      const optionConfigs = field.optionConfigs.map((oc) => {
+        if (!oc.nestedForm?.fields?.length) return oc;
+        return {
+          ...oc,
+          nestedForm: {
+            ...oc.nestedForm,
+            fields: updateFieldById(oc.nestedForm.fields, targetId, updates),
+          },
+        };
+      });
+      if (optionConfigs !== field.optionConfigs) {
+        nextField = { ...nextField, optionConfigs };
+      }
+    }
+
+    return nextField;
   });
 }
 

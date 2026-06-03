@@ -15,6 +15,16 @@ import {
   cloneFieldWithNewIds,
 } from '../../../lib/fieldOperations';
 
+declare global {
+  interface Window {
+    __FORM_BUILDER_DEBUG__?: boolean;
+  }
+}
+
+function isDebugEnabled(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.__FORM_BUILDER_DEBUG__);
+}
+
 export interface FormBuilderState {
   fields: FormField[];
   selectedFieldId: string | null;
@@ -138,9 +148,28 @@ export const useFormBuilderStore = create<FormBuilderState>((set, get) => ({
   },
 
   updateField: (fieldId, updates) => {
-    const { fields } = get();
-    const updatedFields = updateFieldById(fields, fieldId, updates);
-    set({ fields: updatedFields });
+    set((state) => ({
+      fields: (() => {
+        const debug = isDebugEnabled();
+        const before = debug ? findFieldById(state.fields, fieldId) : undefined;
+        const nextFields = updateFieldById(state.fields, fieldId, updates);
+        if (debug) {
+          const after = findFieldById(nextFields, fieldId);
+          const beforeDepends = before?.dataSource?.dependsOn;
+          const afterDepends = after?.dataSource?.dependsOn;
+          if (beforeDepends !== afterDepends) {
+            console.debug('[FormBuilder][dependsOn changed]', {
+              fieldId,
+              before: beforeDepends,
+              after: afterDepends,
+              updateKeys: Object.keys(updates ?? {}),
+              dataSourcePatch: updates?.dataSource,
+            });
+          }
+        }
+        return nextFields;
+      })(),
+    }));
   },
 
   deleteField: (fieldId) => {

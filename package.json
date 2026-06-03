@@ -1,6 +1,6 @@
 {
   "name": "@dynamic-core/form-kit",
-  "version": "2.7.0",
+  "version": "2.10.0",
   "description": "Dynamic form builder, field renderers, and display components (Tailwind v4). Publish from this folder after bumping version (npm publish; scope access in publishConfig).",
   "license": "ISC",
   "author": {

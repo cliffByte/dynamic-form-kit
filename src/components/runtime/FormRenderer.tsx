@@ -4,8 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormField } from '../../types/form';
 import { createEnhancedSubmission, shouldShowField } from '../../lib/formUtils';
 import { cleanSubmissionData } from '../../lib/formUtils';
-import { getNestedValue } from '../../hooks/useDynamicOptions';
-import { buildDynamicDataSourceRequest } from '../../lib/dynamicDataSourceRequest';
+import { useDynamicFormOptions } from '../../hooks/useDynamicFormOptions';
+import { getDynamicParentFieldId } from '../../lib/dynamicFieldUtils';
 import { useLocalizedFields } from '../../hooks/useLocalizedField';
 import { useFormKit } from '../../context/FormKitContext';
 import { Button } from '../ui/button';
@@ -40,41 +40,6 @@ import {
 } from './MultiStepFormNav';
 
 type Values = Record<string, any>;
-
-function isDynamicField(field: FormField): boolean {
-  return Boolean(field.isDynamic && field.dataSource);
-}
-
-async function fetchDynamicOptionsForField(
-  field: FormField,
-  parentValue: any,
-): Promise<Array<{ value: string; label: string }>> {
-  const ds = field.dataSource;
-  if (!ds) return [];
-
-  if (ds.dependsOn && !parentValue) return [];
-
-  const { url, init: requestOptions } = buildDynamicDataSourceRequest(
-    ds,
-    parentValue,
-  );
-
-  const response = await fetch(url, requestOptions);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const extractedData = getNestedValue(data, ds.path);
-  if (!Array.isArray(extractedData)) {
-    throw new Error('Extracted data is not an array');
-  }
-
-  return extractedData.map((item: any) => ({
-    value: String(getNestedValue(item, ds.valueField) ?? ''),
-    label: String(getNestedValue(item, ds.labelField) ?? ''),
-  }));
-}
 
 export interface FormRendererStepLabels extends MultiStepFormLabels {}
 
@@ -173,12 +138,6 @@ export function FormRenderer({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  const [dynamicOptions, setDynamicOptions] = useState<
-    Record<string, Array<{ value: string; label: string }>>
-  >({});
-  const [loadingFields, setLoadingFields] = useState<Record<string, boolean>>({});
-  const [errorFields, setErrorFields] = useState<Record<string, string>>({});
-
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [activeStepGroup, setActiveStepGroup] = useState<StepGroup | null>(null);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -220,78 +179,12 @@ export function FormRenderer({
     [fields, values],
   );
 
-  const lastParentValuesRef = useRef<Record<string, any>>({});
-  useEffect(() => {
-    const dynamicVisible = visibleFields.filter(isDynamicField);
-    if (dynamicVisible.length === 0) return;
-
-    let cancelled = false;
-    const run = async () => {
-      await Promise.all(
-        dynamicVisible.map(async (field) => {
-          const ds = field.dataSource;
-          if (!ds) return;
-
-          const parentId = ds.dependsOn;
-          const parentValue = parentId ? valuesRef.current[parentId] : undefined;
-          const parentKey = parentId
-            ? `${field.id}:${String(parentValue ?? '')}`
-            : `${field.id}:__no_parent__`;
-
-          if (parentId && !parentValue) {
-            setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
-            return;
-          }
-
-          if (lastParentValuesRef.current[field.id] === parentKey) return;
-          lastParentValuesRef.current[field.id] = parentKey;
-
-          setLoadingFields((prev) => ({ ...prev, [field.id]: true }));
-          setErrorFields((prev) => ({ ...prev, [field.id]: '' }));
-
-          try {
-            const opts = await fetchDynamicOptionsForField(field, parentValue);
-            if (!cancelled) {
-              setDynamicOptions((prev) => ({ ...prev, [field.id]: opts }));
-            }
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Failed to load options';
-            if (!cancelled) {
-              setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
-              setErrorFields((prev) => ({ ...prev, [field.id]: msg }));
-            }
-          } finally {
-            if (!cancelled) {
-              setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
-            }
-          }
-        }),
-      );
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [visibleFields]);
-
-  const retryDynamicField = useCallback(async (field: FormField) => {
-    const ds = field.dataSource;
-    if (!ds) return;
-    const parentValue = ds.dependsOn ? valuesRef.current[ds.dependsOn] : undefined;
-    setLoadingFields((prev) => ({ ...prev, [field.id]: true }));
-    setErrorFields((prev) => ({ ...prev, [field.id]: '' }));
-    try {
-      const opts = await fetchDynamicOptionsForField(field, parentValue);
-      setDynamicOptions((prev) => ({ ...prev, [field.id]: opts }));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to load options';
-      setDynamicOptions((prev) => ({ ...prev, [field.id]: [] }));
-      setErrorFields((prev) => ({ ...prev, [field.id]: msg }));
-    } finally {
-      setLoadingFields((prev) => ({ ...prev, [field.id]: false }));
-    }
-  }, []);
+  const {
+    dynamicOptions,
+    loadingFields,
+    errorFields,
+    retryDynamicField,
+  } = useDynamicFormOptions(visibleFields, values);
 
   const validateCurrentStep = useCallback(
     (stepField: FormField) => {
@@ -368,7 +261,6 @@ export function FormRenderer({
     setSubmitError(null);
     setCurrentStepIndex(0);
     setCompletedSteps(new Set());
-    lastParentValuesRef.current = {};
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -379,9 +271,9 @@ export function FormRenderer({
       if (field.isHidden) return null;
       if (!shouldShowField(field, values)) return null;
 
-      const ds = field.dataSource;
-      const dependsOn =
-        ds?.dependsOn && ds.dependsOn !== 'none' ? ds.dependsOn : undefined;
+      const dependsOn = field.dataSource
+        ? getDynamicParentFieldId(field.dataSource)
+        : undefined;
       const parentValue = dependsOn ? values[dependsOn] : undefined;
       const isDependent = Boolean(dependsOn);
       const parentHasValue = isDependent
