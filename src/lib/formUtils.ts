@@ -619,6 +619,11 @@ export function buildNullNestedSubmissionData(
   return out;
 }
 
+export type CleanSubmissionDataOptions = {
+  /** Include `isHidden` fields that have an explicit `default_value` (selected nested option branch). */
+  includeHiddenDefaults?: boolean;
+};
+
 /**
  * Cleans submission data by removing hidden fields and nested fields from non-selected options.
  * Unselected option nested forms are saved with null child values (not schema defaults).
@@ -627,14 +632,24 @@ export function buildNullNestedSubmissionData(
 export function cleanSubmissionData(
   formData: Record<string, any>,
   schemaFields: FormField[],
+  options?: CleanSubmissionDataOptions,
 ): Record<string, any> {
   const cleanedData: Record<string, any> = {};
   const optionNestedFieldIds = getOptionNestedFieldIds(schemaFields);
 
-  function processFields(fields: FormField[]) {
+  function processFields(
+    fields: FormField[],
+    nestedOptions?: CleanSubmissionDataOptions,
+  ) {
     fields.forEach((field) => {
-      // Evaluate visibility - skip if hidden
-      if (field.isHidden || !shouldShowField(field, formData)) {
+      const includeHiddenDefault =
+        nestedOptions?.includeHiddenDefaults &&
+        field.isHidden &&
+        field.default_value !== undefined &&
+        field.default_value !== null;
+
+      // Evaluate visibility - skip if hidden (except hidden defaults in selected nested option)
+      if ((field.isHidden && !includeHiddenDefault) || !shouldShowField(field, formData)) {
         return;
       }
 
@@ -642,7 +657,7 @@ export function cleanSubmissionData(
       if (field.type === 'step_section' || field.type === 'ui_section') {
         // Sections: recurse into children
         if (field.fields) {
-          processFields(field.fields);
+          processFields(field.fields, nestedOptions);
         }
       } else if (field.type === 'array' || field.type === 'table') {
         // Array/table: Include as-is (they have their own internal structure)
@@ -690,7 +705,9 @@ export function cleanSubmissionData(
             : val === opt.value;
 
           nestedFormObj[opt.value] = isSelected
-            ? cleanSubmissionData(formData, nestedFields)
+            ? cleanSubmissionData(formData, nestedFields, {
+                includeHiddenDefaults: true,
+              })
             : buildNullNestedSubmissionData(nestedFields);
         }
 
@@ -703,6 +720,6 @@ export function cleanSubmissionData(
     });
   }
 
-  processFields(schemaFields);
+  processFields(schemaFields, options);
   return cleanedData;
 }

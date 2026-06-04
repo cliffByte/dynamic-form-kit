@@ -221,6 +221,39 @@ export function collectVisibleFields(
   return out;
 }
 
+/**
+ * True when a nested option form has at least one field the runtime would render
+ * (not schema-hidden, not conditionally hidden, not display-only containers).
+ */
+export function hasRenderableNestedFormFields(
+  fields: FormField[],
+  values: FormSubmissionData = {},
+): boolean {
+  for (const field of fields) {
+    if (field.isHidden) continue;
+    if (!shouldShowField(field, values)) continue;
+    if (field.type === 'rich_text') continue;
+
+    if (
+      (field.type === 'step_section' || field.type === 'ui_section') &&
+      field.fields?.length
+    ) {
+      if (hasRenderableNestedFormFields(field.fields, values)) {
+        return true;
+      }
+      continue;
+    }
+
+    if (field.type === 'step_section' || field.type === 'ui_section') {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 export function pickSubmissionValuesForFields(
   visibleFields: FormField[],
   values: FormSubmissionData,

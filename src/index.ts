@@ -93,6 +93,7 @@ export {
   scrollToFirstFieldError,
   findStepIndexForFieldId,
   collectVisibleFields,
+  hasRenderableNestedFormFields,
   pickSubmissionValuesForFields,
   getStepVisibleFieldIds,
   validateStepSection,

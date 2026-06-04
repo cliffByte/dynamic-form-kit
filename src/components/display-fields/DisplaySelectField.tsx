@@ -7,6 +7,7 @@ import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { getLocalizedValue } from '../../lib/utils';
 import { getChoiceFieldValue } from '../../lib/formUtils';
+import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
 import { useFormKit } from '../../context/FormKitContext';
 
 export function DisplaySelectField({
@@ -18,6 +19,7 @@ export function DisplaySelectField({
   loadError,
   onRetry,
   renderField,
+  formValues = {},
 }: DisplayFieldProps) {
   const { locale: currentLocale } = useFormKit();
 
@@ -72,7 +74,12 @@ export function DisplaySelectField({
         ? [choiceValue]
         : [];
     return field.optionConfigs
-      .filter((c) => selectedValues.includes(c.value) && c.nestedForm)
+      .filter(
+        (c) =>
+          selectedValues.includes(c.value) &&
+          c.nestedForm?.fields?.length &&
+          hasRenderableNestedFormFields(c.nestedForm.fields, formValues),
+      )
       .map((c) => ({ optionLabel: c.label, nestedForm: c.nestedForm! }));
   };
 
@@ -149,7 +156,6 @@ export function DisplaySelectField({
       <div className='space-y-3'>
         {renderValue()}
 
-        {/* Render nested form fields for selected options */}
         {nestedForms.length > 0 && renderField && (
           <div className='space-y-4'>
             {nestedForms.map(({ optionLabel, nestedForm }) => (

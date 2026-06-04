@@ -14,6 +14,7 @@ import {
 } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
 
 /**
  * Radio button group field
@@ -36,6 +37,7 @@ export function RadioField({
   parentHasValue,
   parentFieldName,
   renderField,
+  formValues = {},
 }: DynamicFieldProps) {
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
@@ -62,6 +64,9 @@ export function RadioField({
     (c) => c.value === sanitizedValue,
   );
   const nestedForm = selectedOptionConfig?.nestedForm;
+  const showNestedForm =
+    nestedForm?.fields?.length &&
+    hasRenderableNestedFormFields(nestedForm.fields, formValues);
 
   return (
     <FieldWrapper
@@ -125,16 +130,12 @@ export function RadioField({
             })}
           </RadioGroup>
 
-          {/* Render nested form fields if the selected option has a nested form */}
-          {nestedForm &&
-            nestedForm.fields &&
-            nestedForm.fields.length > 0 &&
-            renderField && (
+          {showNestedForm && renderField && (
               <div className='ml-4 pl-4 border-l-2 border-primary/30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300'>
                 <div className='text-sm font-medium text-muted-foreground'>
-                  {nestedForm.name || 'Additional Information'}
+                  {nestedForm!.name || 'Additional Information'}
                 </div>
-                {nestedForm.fields.map((nestedField) => (
+                {nestedForm!.fields.map((nestedField) => (
                   <div key={nestedField.id}>{renderField(nestedField)}</div>
                 ))}
               </div>

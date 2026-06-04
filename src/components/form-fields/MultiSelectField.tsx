@@ -14,6 +14,7 @@ import {
 } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
 
 /**
  * Multi-select field with card-based selection UI
@@ -36,6 +37,7 @@ export function MultiSelectField({
   parentHasValue,
   parentFieldName,
   renderField,
+  formValues = {},
 }: DynamicFieldProps) {
   const selectedValues: string[] = sanitizeMultiChoiceFieldValue(field, value);
 
@@ -73,10 +75,14 @@ export function MultiSelectField({
     onChange(selectedValues.filter((v) => v !== optionValue));
   };
 
-  // Get nested forms for all selected options
-  const selectedNestedForms =
+  const visibleNestedForms =
     field.optionConfigs
-      ?.filter((c) => selectedValues.includes(c.value) && c.nestedForm)
+      ?.filter(
+        (c) =>
+          selectedValues.includes(c.value) &&
+          c.nestedForm?.fields?.length &&
+          hasRenderableNestedFormFields(c.nestedForm.fields, formValues),
+      )
       .map((c) => ({ optionLabel: c.label, nestedForm: c.nestedForm! })) || [];
 
   return (
@@ -174,10 +180,9 @@ export function MultiSelectField({
         </Card>
       )}
 
-      {/* Render nested form fields for all selected options that have nested forms */}
-      {selectedNestedForms.length > 0 && renderField && (
+      {visibleNestedForms.length > 0 && renderField && (
         <div className='space-y-4 mt-4'>
-          {selectedNestedForms.map(({ optionLabel, nestedForm }) => (
+          {visibleNestedForms.map(({ optionLabel, nestedForm }) => (
             <div
               key={nestedForm.id}
               className='ml-4 pl-4 border-l-2 border-primary/30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300'>

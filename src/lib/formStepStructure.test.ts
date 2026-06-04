@@ -4,6 +4,7 @@ import {
   applyFieldVisibility,
   collectVisibleFields,
   groupStepSections,
+  hasRenderableNestedFormFields,
   validateVisibleFields,
 } from './formStepStructure';
 
@@ -162,5 +163,22 @@ describe('hidden sections and validation', () => {
     const effective = applyFieldVisibility(fields, true);
     const result = validateVisibleFields(effective, {});
     expect(result.isValid).toBe(true);
+  });
+});
+
+describe('hasRenderableNestedFormFields', () => {
+  it('returns false when every nested field is hidden', () => {
+    const fields: FormField[] = [
+      makeTextField('hidden_child', { isHidden: true, default_value: 'x' }),
+    ];
+    expect(hasRenderableNestedFormFields(fields, {})).toBe(false);
+  });
+
+  it('returns true when at least one nested field is visible', () => {
+    const fields: FormField[] = [
+      makeTextField('hidden_child', { isHidden: true }),
+      makeTextField('visible_child'),
+    ];
+    expect(hasRenderableNestedFormFields(fields, {})).toBe(true);
   });
 });

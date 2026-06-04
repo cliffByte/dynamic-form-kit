@@ -89,4 +89,60 @@ describe('cleanSubmissionData nested options', () => {
       child_b: null,
     });
   });
+
+  it('includes hidden nested fields with default_value for the selected option', () => {
+    const hiddenChildId = 'a9470ed8-ca88-4649-813d-2658d8fed733';
+    const fields: FormField[] = [
+      {
+        id: 'parent',
+        type: 'select',
+        label: 'Parent',
+        required: false,
+        optionConfigs: [
+          {
+            label: 'Option 1',
+            value: 'option_1',
+            nestedForm: {
+              id: 'nf_1',
+              name: 'Nested 1',
+              fields: [
+                {
+                  id: hiddenChildId,
+                  type: 'text',
+                  label: 'Hidden default',
+                  required: false,
+                  isHidden: true,
+                  default_value: 'preset-value',
+                },
+              ],
+            },
+          },
+          {
+            label: 'Option 2',
+            value: 'option_2',
+            nestedForm: {
+              id: 'nf_2',
+              name: 'Nested 2',
+              fields: [
+                {
+                  id: 'child_visible',
+                  type: 'text',
+                  label: 'Visible',
+                  required: false,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    const cleaned = cleanSubmissionData({ parent: 'option_1' }, fields);
+
+    expect(cleaned.parent[NESTED_OPTION_SELECTION_KEY]).toBe('option_1');
+    expect(cleaned.parent.option_1).toEqual({
+      [hiddenChildId]: 'preset-value',
+    });
+    expect(cleaned.parent.option_2).toEqual({ child_visible: null });
+  });
 });
