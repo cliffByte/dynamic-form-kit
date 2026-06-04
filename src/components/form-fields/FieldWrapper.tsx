@@ -41,7 +41,7 @@ export function FieldWrapper({
   className,
 }: FieldWrapperProps) {
   return (
-    <div id={`field-${fieldId}`} className={cn('space-y-1', className)}>
+    <div id={`field-${fieldId}`} className={cn('min-w-0 space-y-1', className)}>
       {/* Label row */}
       <div className='flex items-center'>
         <Label

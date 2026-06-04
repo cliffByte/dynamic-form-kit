@@ -452,9 +452,11 @@ export function FormRenderer({
   );
 
   const renderSinglePageFields = () => (
-    <div className={cn('grid gap-4', fieldsClassName)}>
+    <div className={cn('grid min-w-0 gap-4', fieldsClassName)}>
       {fields.map((field) => (
-        <div key={field.id}>{renderField(field)}</div>
+        <div key={field.id} className='min-w-0'>
+          {renderField(field)}
+        </div>
       ))}
     </div>
   );
@@ -490,9 +492,11 @@ export function FormRenderer({
             </div>
 
             {currentStep.fields && currentStep.fields.length > 0 && (
-              <div className={cn('space-y-4', fieldsClassName)}>
+              <div className={cn('min-w-0 space-y-4', fieldsClassName)}>
                 {currentStep.fields.map((nestedField) => (
-                  <div key={nestedField.id}>{renderField(nestedField)}</div>
+                  <div key={nestedField.id} className='min-w-0'>
+                    {renderField(nestedField)}
+                  </div>
                 ))}
               </div>
             )}
@@ -500,9 +504,11 @@ export function FormRenderer({
         )}
 
         {formStructure.nonStepFields.length > 0 && isLastStep && (
-          <div className={cn('space-y-4 mt-4 pt-4 border-t', fieldsClassName)}>
+          <div className={cn('min-w-0 space-y-4 mt-4 pt-4 border-t', fieldsClassName)}>
             {formStructure.nonStepFields.map(({ field }) => (
-              <div key={field.id}>{renderField(field)}</div>
+              <div key={field.id} className='min-w-0'>
+                {renderField(field)}
+              </div>
             ))}
           </div>
         )}

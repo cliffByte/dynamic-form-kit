@@ -59,6 +59,131 @@ function isImageFile(file: MediaFile): boolean {
   );
 }
 
+/** Single uploaded file row — constrained so long names do not break layout. */
+function MediaFileListItem({
+  file,
+  disabled,
+  onPreview,
+  onRemove,
+}: {
+  file: MediaFile;
+  disabled?: boolean;
+  onPreview: () => void;
+  onRemove: () => void;
+}) {
+  const meta = [
+    formatFileSize(file.size),
+    !file.url && file.file ? 'Will upload on submit' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className='group w-full max-w-full min-w-0 overflow-hidden rounded-lg border bg-muted/20 p-2 transition-colors hover:bg-muted/40 sm:p-3'>
+      <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
+        <div className='flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted sm:size-12'>
+          {isImageFile(file) && (file.preview || file.url) ? (
+            <img
+              src={file.preview || file.url}
+              alt={file.name}
+              className='size-full object-cover'
+            />
+          ) : (
+            <span className='text-muted-foreground'>
+              {getFileIcon(file.type, 'w-6 h-6 sm:w-8 sm:h-8')}
+            </span>
+          )}
+        </div>
+
+        <div className='min-w-0 flex-1 overflow-hidden'>
+          <p className='truncate text-sm font-medium' title={file.name}>
+            {file.name}
+          </p>
+          <p className='truncate text-xs text-muted-foreground' title={meta}>
+            {meta}
+          </p>
+        </div>
+
+        <div className='hidden shrink-0 items-center gap-0.5 sm:group-hover:flex'>
+        {(file.preview || file.url) && (
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-8 shrink-0'
+            onClick={onPreview}>
+            <Eye className='size-4' />
+          </Button>
+        )}
+        {file.url && (
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-8 shrink-0'
+            asChild>
+            <a
+              href={file.url}
+              download={file.name}
+              target='_blank'
+              rel='noopener noreferrer'>
+              <Download className='size-4' />
+            </a>
+          </Button>
+        )}
+        <Button
+          type='button'
+          variant='ghost'
+          size='icon'
+          className='size-8 shrink-0 text-red-500 hover:bg-red-50 hover:text-red-600'
+          onClick={onRemove}
+          disabled={disabled}>
+          <X className='size-4' />
+        </Button>
+        </div>
+      </div>
+
+      <div className='mt-2 flex items-center justify-end gap-0.5 border-t border-border/50 pt-2 sm:hidden'>
+        {(file.preview || file.url) && (
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-8 shrink-0'
+            onClick={onPreview}>
+            <Eye className='size-4' />
+          </Button>
+        )}
+        {file.url && (
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-8 shrink-0'
+            asChild>
+            <a
+              href={file.url}
+              download={file.name}
+              target='_blank'
+              rel='noopener noreferrer'>
+              <Download className='size-4' />
+            </a>
+          </Button>
+        )}
+        <Button
+          type='button'
+          variant='ghost'
+          size='icon'
+          className='size-8 shrink-0 text-red-500 hover:bg-red-50 hover:text-red-600'
+          onClick={onRemove}
+          disabled={disabled}>
+          <X className='size-4' />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Shared upload logic
 // ---------------------------------------------------------------------------
@@ -199,7 +324,7 @@ function DropZone({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       className={cn(
-        'relative border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200',
+        'relative w-full min-w-0 max-w-full border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200',
         dragActive && 'border-primary bg-primary/5',
         !dragActive &&
           'border-muted-foreground/30 hover:border-muted-foreground/50',
@@ -394,7 +519,7 @@ function MediaFieldEdit({
       showError={showError}
       errorMessage={errorMessage}
       className={className}>
-      <div className='space-y-3'>
+      <div className='w-full min-w-0 max-w-full space-y-3'>
         <DropZone
           fieldId={field.id}
           multiple={allowMultiple}
@@ -414,72 +539,15 @@ function MediaFieldEdit({
         />
 
         {files.length > 0 && (
-          <div className='space-y-2'>
+          <div className='w-full min-w-0 space-y-2'>
             {files.map((file, index) => (
-              <div
-                key={index}
-                className='flex items-center gap-3 p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors group'>
-                {/* Thumbnail / icon */}
-                <div className='flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center'>
-                  {isImageFile(file) && (file.preview || file.url) ? (
-                    <img
-                      src={file.preview || file.url}
-                      alt={file.name}
-                      className='w-full h-full object-cover'
-                    />
-                  ) : (
-                    <span className='text-muted-foreground'>
-                      {getFileIcon(file.type)}
-                    </span>
-                  )}
-                </div>
-                {/* Info */}
-                <div className='flex-1 min-w-0'>
-                  <p className='font-medium text-sm truncate'>{file.name}</p>
-                  <p className='text-xs text-muted-foreground'>
-                    {formatFileSize(file.size)}
-                    {!file.url && file.file && ' · Will upload on submit'}
-                  </p>
-                </div>
-                {/* Actions */}
-                <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
-                  {(file.preview || file.url) && (
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      className='h-8 w-8'
-                      onClick={() => setPreviewFile(file)}>
-                      <Eye className='w-4 h-4' />
-                    </Button>
-                  )}
-                  {file.url && (
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      className='h-8 w-8'
-                      asChild>
-                      <a
-                        href={file.url}
-                        download={file.name}
-                        target='_blank'
-                        rel='noopener noreferrer'>
-                        <Download className='w-4 h-4' />
-                      </a>
-                    </Button>
-                  )}
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='icon'
-                    className='h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50'
-                    onClick={() => removeFile(index)}
-                    disabled={disabled}>
-                    <X className='w-4 h-4' />
-                  </Button>
-                </div>
-              </div>
+              <MediaFileListItem
+                key={`${file.name}-${index}`}
+                file={file}
+                disabled={disabled}
+                onPreview={() => setPreviewFile(file)}
+                onRemove={() => removeFile(index)}
+              />
             ))}
           </div>
         )}

@@ -35,7 +35,7 @@ export const SectionField = React.memo(function SectionField({
   return (
     <div
       className={cn(
-        'rounded-md border border-border bg-card shadow-sm overflow-visible transition-all duration-200',
+        'min-w-0 overflow-hidden rounded-md border border-border bg-card shadow-sm transition-all duration-200',
         'hover:shadow-sm',
         className,
       )}>
@@ -64,17 +64,25 @@ export const SectionField = React.memo(function SectionField({
       {nestedFields.length > 0 && (
         <div
           className={cn(
-            'p-4 overflow-visible',
+            'min-w-0 p-4',
             !isGrid
               ? 'flex flex-col gap-8'
               : cn(
                   'grid grid-cols-1',
                   gridColsMap[gridColumns] ?? 'lg:grid-cols-2',
+                  'lg:[grid-template-columns:repeat(var(--section-grid-cols),minmax(0,1fr))]',
                 ),
           )}
-          style={isGrid ? { gap: `${gap}px` } : undefined}>
+          style={
+            isGrid
+              ? ({
+                  gap: `${gap}px`,
+                  ['--section-grid-cols' as string]: String(gridColumns),
+                } as React.CSSProperties)
+              : undefined
+          }>
           {nestedFields.map((nestedField) => (
-            <div key={nestedField.id}>
+            <div key={nestedField.id} className='min-w-0'>
               {renderField ? renderField(nestedField) : null}
             </div>
           ))}
