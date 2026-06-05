@@ -544,7 +544,9 @@ export const SectionField = React.memo(function SectionField({
                                       ? `(${col.type}: ${defaultVal.value})`
                                       : col.type === 'text' && '(text)'
                                         ? '(text)'
-                                        : col.type === 'number' && '(number)'
+                                        : col.type === 'nepali_unicode'
+                                          ? '(नेपाली)'
+                                          : col.type === 'number' && '(number)'
                                           ? '(number)'
                                           : col.type === 'select'
                                             ? `(${col.options?.join(' / ') || 'select'})`
@@ -568,6 +570,7 @@ export const SectionField = React.memo(function SectionField({
                             key={col.id}
                             className='px-3 py-2 border-r last:border-r-0 text-muted-foreground/50'>
                             {col.type === 'text' && '(text)'}
+                            {col.type === 'nepali_unicode' && '(नेपाली)'}
                             {col.type === 'number' && '(number)'}
                             {col.type === 'select' &&
                               `(${col.options?.join(' / ') || 'select'})`}

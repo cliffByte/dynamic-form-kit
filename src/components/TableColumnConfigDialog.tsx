@@ -22,6 +22,7 @@ import {
 } from './ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { generateUUID } from '../lib/utils';
+import { transliterateRomanizedNepali } from '../lib/nepaliTransliteration';
 import { buildGroupedTableHeaders } from '../lib/tableGrouping';
 
 interface TableColumnConfigDialogProps {
@@ -629,6 +630,9 @@ export function TableColumnConfigDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value='text'>Text</SelectItem>
+                          <SelectItem value='nepali_unicode'>
+                            Nepali Unicode
+                          </SelectItem>
                           <SelectItem value='number'>Number</SelectItem>
                           <SelectItem value='select'>
                             Select (Dropdown)
@@ -645,6 +649,7 @@ export function TableColumnConfigDialog({
 
                     {/* Placeholder */}
                     {(selectedColumn.type === 'text' ||
+                      selectedColumn.type === 'nepali_unicode' ||
                       selectedColumn.type === 'number') && (
                       <div className='space-y-2'>
                         <Label htmlFor='col-placeholder'>Placeholder</Label>
@@ -1307,7 +1312,8 @@ export function TableColumnConfigDialog({
                                         <td
                                           key={col.id}
                                           className='px-3 py-2 border'>
-                                          {col.type === 'text' && (
+                                          {(col.type === 'text' ||
+                                            col.type === 'nepali_unicode') && (
                                             <Input
                                               type='text'
                                               value={currentValue}
@@ -1315,10 +1321,18 @@ export function TableColumnConfigDialog({
                                                 setCellDefault(
                                                   row,
                                                   col,
-                                                  e.target.value,
+                                                  col.type === 'nepali_unicode'
+                                                    ? transliterateRomanizedNepali(
+                                                        e.target.value,
+                                                      )
+                                                    : e.target.value,
                                                 )
                                               }
-                                              placeholder='Default value...'
+                                              placeholder={
+                                                col.type === 'nepali_unicode'
+                                                  ? 'Type in Romanized Nepali...'
+                                                  : 'Default value...'
+                                              }
                                               className='h-8 text-sm'
                                             />
                                           )}

@@ -60,7 +60,13 @@ export interface TableColumnGroup {
 export interface TableColumn {
   id: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'multi_select' | 'calculated'; // Supported column types
+  type:
+    | 'text'
+    | 'nepali_unicode'
+    | 'number'
+    | 'select'
+    | 'multi_select'
+    | 'calculated'; // Supported column types
   placeholder?: string;
   options?: string[]; // For select/multi_select columns
   formula?: string; // For calculated columns

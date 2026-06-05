@@ -752,6 +752,14 @@ export function buildFieldSchema(
                   : col.options;
               colSchema = z.array(z.string()).optional().default([]);
               break;
+            case 'nepali_unicode':
+              colSchema = (z.string().optional() as z.ZodOptional<z.ZodString>).refine(
+                (val) => !val || validateLanguage(val, 'ne'),
+                {
+                  message: getLanguageErrorMessage('ne', colLabel),
+                },
+              );
+              break;
             default:
               colSchema = z.string().optional();
           }
@@ -764,6 +772,13 @@ export function buildFieldSchema(
               colSchema = z
                 .array(z.string())
                 .min(1, `${colLabel} requires at least one selection`);
+            } else if (col.type === 'nepali_unicode') {
+              colSchema = z
+                .string()
+                .min(1, `${colLabel} is required`)
+                .refine((val) => validateLanguage(val, 'ne'), {
+                  message: getLanguageErrorMessage('ne', colLabel),
+                });
             } else if (col.type !== 'calculated') {
               colSchema = z.string().min(1, `${colLabel} is required`);
             }

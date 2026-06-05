@@ -14,6 +14,7 @@ import {
   getEffectiveTableRowDefinitions,
   isTableExpandByColumns,
 } from '../../lib/tableExpand';
+import { transliterateRomanizedNepali } from '../../lib/nepaliTransliteration';
 
 interface TableRow {
   [key: string]: any;
@@ -914,6 +915,20 @@ function renderCell(
             className='w-3 h-3 cursor-not-allowed absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50'
           />
         </div>
+      );
+
+    case 'nepali_unicode':
+      return (
+        <Input
+          type='text'
+          value={value ?? ''}
+          onChange={(e) =>
+            onChange(transliterateRomanizedNepali(e.target.value))
+          }
+          disabled={disabled}
+          className='h-8 text-sm border-none rounded-none'
+          placeholder={placeholder || 'Type in Romanized Nepali...'}
+        />
       );
 
     case 'text':
