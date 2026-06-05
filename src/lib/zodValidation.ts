@@ -8,7 +8,14 @@ import {
 } from './languageValidation';
 import { resolveDateConstraint } from './dateConstraint';
 import { parseStoredDateValue } from './nepaliCalendar';
-import { getMediaMaxFiles, isMediaMultipleField } from './mediaUploadUtils';
+import {
+  formatMediaFileSize,
+  getMediaMaxFiles,
+  getMediaMaxSize,
+  getMediaMaxTotalSize,
+  isMediaMultipleField,
+  normalizeMediaFieldValue,
+} from './mediaUploadUtils';
 
 function resolveSubmittedDate(
   val: string | Date | undefined,
@@ -565,12 +572,60 @@ export function buildFieldSchema(
       break;
 
     case 'media': {
+      const maxSize = getMediaMaxSize(field);
+      const maxTotalSize = getMediaMaxTotalSize(field);
+
+      const getMediaItemSize = (item: unknown): number | undefined => {
+        if (!item || typeof item !== 'object') return undefined;
+        const file = (item as { file?: File }).file;
+        if (file instanceof File) return file.size;
+        const size = (item as { size?: number }).size;
+        return typeof size === 'number' ? size : undefined;
+      };
+
       const isValidMediaItem = (item: unknown): boolean => {
         if (!item || typeof item !== 'object') return false;
         return (
           Boolean((item as { url?: string }).url) ||
           (item as { file?: File }).file instanceof File
         );
+      };
+
+      const withMediaSizeRules = (base: z.ZodTypeAny): z.ZodTypeAny => {
+        let next = base.refine(
+          (val) => {
+            const items = Array.isArray(val)
+              ? val
+              : val == null || val === ''
+                ? []
+                : [val];
+            return items.every((item) => {
+              const size = getMediaItemSize(item);
+              return size === undefined || size <= maxSize;
+            });
+          },
+          {
+            message: `${getLabel()} has a file exceeding the maximum size of ${formatMediaFileSize(maxSize)} per file`,
+          },
+        );
+
+        if (maxTotalSize !== undefined) {
+          next = next.refine(
+            (val) => {
+              const items = normalizeMediaFieldValue(val);
+              const total = items.reduce(
+                (sum, item) => sum + (getMediaItemSize(item) ?? 0),
+                0,
+              );
+              return total <= maxTotalSize;
+            },
+            {
+              message: `${getLabel()} total file size exceeds the maximum of ${formatMediaFileSize(maxTotalSize)}`,
+            },
+          );
+        }
+
+        return next;
       };
 
       if (isMediaMultipleField(field)) {
@@ -593,16 +648,20 @@ export function buildFieldSchema(
           maxFiles,
           `${getLabel()} allows maximum ${maxFiles} files`,
         );
+        schema = withMediaSizeRules(schema);
       } else {
-        schema = z.any().refine(
-          (val) => {
-            if (val instanceof File) return true;
-            if (typeof val === 'object' && val !== null) {
-              return isValidMediaItem(val);
-            }
-            return false;
-          },
-          { message: `${getLabel()} requires a valid file upload` },
+        schema = withMediaSizeRules(
+          z.any().refine(
+            (val) => {
+              if (val == null || val === '') return !field.required;
+              if (val instanceof File) return true;
+              if (typeof val === 'object' && val !== null) {
+                return isValidMediaItem(val);
+              }
+              return false;
+            },
+            { message: `${getLabel()} requires a valid file upload` },
+          ),
         );
       }
       break;

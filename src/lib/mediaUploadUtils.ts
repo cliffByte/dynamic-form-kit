@@ -51,6 +51,98 @@ export function getMediaMaxFiles(field: FormField): number {
   return 1;
 }
 
+/** Max bytes per file (default 10 MB). */
+export function getMediaMaxSize(field: FormField): number {
+  const raw = field.maxSize ?? (field as { max_size?: unknown }).max_size;
+  const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return 10 * 1024 * 1024;
+}
+
+/** Max combined bytes for all files (optional). */
+export function getMediaMaxTotalSize(field: FormField): number | undefined {
+  const raw =
+    field.maxTotalSize ?? (field as { max_total_size?: unknown }).max_total_size;
+  const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return undefined;
+}
+
+export function formatMediaFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export interface MediaUploadValidationResult {
+  accepted: File[];
+  errors: string[];
+}
+
+/** Client-side checks before adding files to a media field. */
+export function validateMediaUploadSelection(
+  incoming: File[],
+  currentFiles: MediaFileLike[],
+  options: {
+    allowMultiple: boolean;
+    maxFiles: number;
+    maxSize: number;
+    maxTotalSize?: number;
+  },
+): MediaUploadValidationResult {
+  const errors: string[] = [];
+  const { allowMultiple, maxFiles, maxSize, maxTotalSize } = options;
+
+  if (incoming.length === 0) {
+    return { accepted: [], errors: [] };
+  }
+
+  const toProcess = allowMultiple ? Array.from(incoming) : [incoming[0]];
+
+  if (allowMultiple) {
+    const remaining = maxFiles - currentFiles.length;
+    if (remaining <= 0) {
+      errors.push(
+        `Maximum ${maxFiles} file${maxFiles === 1 ? '' : 's'} allowed`,
+      );
+      return { accepted: [], errors };
+    }
+    if (toProcess.length > remaining) {
+      errors.push(
+        `Maximum ${maxFiles} file${maxFiles === 1 ? '' : 's'} allowed. You can add ${remaining} more.`,
+      );
+      return { accepted: [], errors };
+    }
+  }
+
+  const accepted: File[] = [];
+  let pendingTotal = currentFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+
+  for (const file of toProcess) {
+    if (file.size > maxSize) {
+      errors.push(
+        `${file.name} exceeds the maximum size of ${formatMediaFileSize(maxSize)} per file`,
+      );
+      continue;
+    }
+
+    if (
+      maxTotalSize !== undefined &&
+      pendingTotal + file.size > maxTotalSize
+    ) {
+      errors.push(
+        `Total file size exceeds the maximum of ${formatMediaFileSize(maxTotalSize)}`,
+      );
+      continue;
+    }
+
+    accepted.push(file);
+    pendingTotal += file.size;
+  }
+
+  return { accepted, errors };
+}
+
 export interface MediaValueShape {
   id?: string;
   url?: string;

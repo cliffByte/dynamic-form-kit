@@ -20,10 +20,14 @@ import { BaseFieldProps } from './types';
 import { cn } from '../../lib/utils';
 import { useFormKit } from '../../context/FormKitContext';
 import {
+  formatMediaFileSize,
   getMediaMaxFiles,
+  getMediaMaxSize,
+  getMediaMaxTotalSize,
   isMediaMultipleField,
   normalizeMediaFieldValue,
   toMediaFieldValue,
+  validateMediaUploadSelection,
 } from '../../lib/mediaUploadUtils';
 
 interface MediaFile {
@@ -34,12 +38,6 @@ interface MediaFile {
   type: string;
   preview?: string;
   file?: File;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function getFileIcon(type: string, className = 'w-8 h-8') {
@@ -72,7 +70,7 @@ function MediaFileListItem({
   onRemove: () => void;
 }) {
   const meta = [
-    formatFileSize(file.size),
+    formatMediaFileSize(file.size),
     !file.url && file.file ? 'Will upload on submit' : null,
   ]
     .filter(Boolean)
@@ -192,9 +190,11 @@ function useFileUploader(
   allowMultiple: boolean,
   maxFiles: number,
   maxSize: number,
+  maxTotalSize: number | undefined,
   onChange: (val: any) => void,
   uploadMedia: (formData: FormData) => Promise<{ url: string; filename: string }>,
   deferMediaUpload: boolean,
+  onUploadError: (message: string | null) => void,
 ) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -202,19 +202,27 @@ function useFileUploader(
   const processFiles = useCallback(
     async (fileList: FileList | null) => {
       if (!fileList || fileList.length === 0) return;
+
+      const currentFiles = filesRef.current;
+      const incoming = Array.from(fileList);
+      const { accepted, errors } = validateMediaUploadSelection(
+        incoming,
+        currentFiles,
+        { allowMultiple, maxFiles, maxSize, maxTotalSize },
+      );
+
+      if (errors.length > 0) {
+        onUploadError(errors.join(' '));
+      }
+
+      if (accepted.length === 0) return;
+
       setUploading(true);
       const newFiles: MediaFile[] = [];
-      const currentFiles = filesRef.current;
-      const remaining = allowMultiple
-        ? Math.max(0, maxFiles - currentFiles.length)
-        : 1;
-      const limit = allowMultiple
-        ? Math.min(fileList.length, remaining)
-        : 1;
+      const uploadErrors: string[] = [];
+
       try {
-        for (let i = 0; i < limit; i++) {
-          const file = fileList[i];
-          if (file.size > maxSize) continue;
+        for (const file of accepted) {
           let preview: string | undefined;
           if (file.type.startsWith('image/'))
             preview = URL.createObjectURL(file);
@@ -242,10 +250,22 @@ function useFileUploader(
                 url: data.url,
                 preview,
               });
+            } else {
+              uploadErrors.push(`Failed to upload ${file.name}`);
             }
-          } catch {}
+          } catch {
+            uploadErrors.push(`Failed to upload ${file.name}`);
+          }
         }
-        if (newFiles.length === 0) return;
+
+        if (newFiles.length === 0) {
+          onUploadError(
+            uploadErrors.length > 0
+              ? uploadErrors.join(' ')
+              : 'No files could be uploaded',
+          );
+          return;
+        }
 
         const merged = allowMultiple
           ? [...currentFiles, ...newFiles].slice(0, maxFiles)
@@ -253,6 +273,11 @@ function useFileUploader(
 
         filesRef.current = merged;
         onChange(toMediaFieldValue(merged, allowMultiple));
+        onUploadError(
+          [...errors, ...uploadErrors].length > 0
+            ? [...errors, ...uploadErrors].join(' ')
+            : null,
+        );
       } finally {
         setUploading(false);
       }
@@ -262,9 +287,11 @@ function useFileUploader(
       allowMultiple,
       maxFiles,
       maxSize,
+      maxTotalSize,
       onChange,
       uploadMedia,
       deferMediaUpload,
+      onUploadError,
     ],
   );
 
@@ -296,6 +323,7 @@ function DropZone({
   maxFiles,
   acceptedTypes,
   maxSize,
+  maxTotalSize,
   deferMediaUpload,
   disabled,
   dragActive,
@@ -309,6 +337,7 @@ function DropZone({
   maxFiles: number;
   acceptedTypes: string[];
   maxSize: number;
+  maxTotalSize?: number;
   deferMediaUpload?: boolean;
   disabled?: boolean;
   dragActive: boolean;
@@ -358,9 +387,12 @@ function DropZone({
               : 'Drag & drop files or click to browse'}
           </p>
           <p className='text-xs text-muted-foreground mt-1'>
-            Max size: {formatFileSize(maxSize)}
+            Max size: {formatMediaFileSize(maxSize)} per file
             {multiple &&
               ` • Up to ${maxFiles} file${maxFiles === 1 ? '' : 's'}`}
+            {multiple &&
+              maxTotalSize !== undefined &&
+              ` • ${formatMediaFileSize(maxTotalSize)} total`}
             {deferMediaUpload && ' • Uploads when you submit the form'}
           </p>
         </div>
@@ -426,7 +458,7 @@ function MediaFieldPreview({
               {media.name}
             </p>
             <p className='text-xs text-muted-foreground'>
-              {formatFileSize(media.size)} · Click to open
+              {formatMediaFileSize(media.size)} · Click to open
             </p>
           </div>
           <ExternalLink className='w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0' />
@@ -442,7 +474,7 @@ function MediaFieldPreview({
           <div className='flex-1 min-w-0'>
             <p className='text-sm font-medium truncate'>{media.name}</p>
             <p className='text-xs text-muted-foreground'>
-              {formatFileSize(media.size)}
+              {formatMediaFileSize(media.size)}
             </p>
           </div>
           <Button
@@ -476,9 +508,11 @@ function MediaFieldEdit({
 }: BaseFieldProps) {
   const { uploadMedia, deferMediaUpload = true } = useFormKit();
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const acceptedTypes = field.acceptedTypes || ['image/*', 'application/pdf'];
-  const maxSize = field.maxSize || 10 * 1024 * 1024;
+  const maxSize = getMediaMaxSize(field);
+  const maxTotalSize = getMediaMaxTotalSize(field);
   const maxFiles = getMediaMaxFiles(field);
   const allowMultiple = isMediaMultipleField(field);
   const files = normalizeMediaFieldValue(value) as MediaFile[];
@@ -491,9 +525,11 @@ function MediaFieldEdit({
       allowMultiple,
       maxFiles,
       maxSize,
+      maxTotalSize,
       onChange,
       uploadMedia,
       deferMediaUpload,
+      setUploadError,
     );
 
   const removeFile = (index: number) => {
@@ -526,6 +562,7 @@ function MediaFieldEdit({
           maxFiles={maxFiles}
           acceptedTypes={acceptedTypes}
           maxSize={maxSize}
+          maxTotalSize={maxTotalSize}
           deferMediaUpload={deferMediaUpload}
           disabled={disabled || (allowMultiple && files.length >= maxFiles)}
           dragActive={dragActive}
@@ -537,6 +574,13 @@ function MediaFieldEdit({
             e.target.value = '';
           }}
         />
+
+        {uploadError && (
+          <p className='text-sm text-red-600 flex items-center gap-1'>
+            <span className='inline-block w-1 h-1 bg-red-600 rounded-full shrink-0' />
+            {uploadError}
+          </p>
+        )}
 
         {files.length > 0 && (
           <div className='w-full min-w-0 space-y-2'>
