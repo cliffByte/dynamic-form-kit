@@ -84,7 +84,7 @@ export function RadioField({
       {loadError ? (
         <FieldError message={loadError} onRetry={onRetry} />
       ) : shouldShowParentRequired ? (
-        <ParentFieldRequired parentFieldName={parentFieldName} />
+        <ParentFieldRequired />
       ) : isLoading ? (
         <FieldLoading />
       ) : options.length === 0 ? (

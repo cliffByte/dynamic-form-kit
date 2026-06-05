@@ -135,21 +135,12 @@ export function FieldEmpty({
 /**
  * Parent field required notice for dependent fields
  */
-export function ParentFieldRequired({
-  parentFieldName,
-}: {
-  parentFieldName?: string;
-}) {
+export function ParentFieldRequired() {
   return (
     <div className='p-4 bg-amber-50 border-2 border-amber-200 rounded-md text-center'>
       <p className='text-sm text-amber-800 font-medium'>
-        Please select the parent field first
+        Select the parent field first
       </p>
-      {parentFieldName && (
-        <p className='text-xs text-amber-600 mt-1'>
-          This field depends on: <strong>{parentFieldName}</strong>
-        </p>
-      )}
     </div>
   );
 }

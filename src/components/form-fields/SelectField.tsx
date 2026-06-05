@@ -10,13 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import {
-  FieldWrapper,
-  FieldLoading,
-  FieldError,
-  FieldEmpty,
-  ParentFieldRequired,
-} from './FieldWrapper';
+import { FieldWrapper, FieldError } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
@@ -39,7 +33,6 @@ export function SelectField({
   onRetry,
   isDependent,
   parentHasValue,
-  parentFieldName,
   renderField,
   formValues = {},
 }: DynamicFieldProps) {
@@ -61,7 +54,16 @@ export function SelectField({
     }
   }, [field, value, sanitizedValue, onChange]);
 
-  const shouldShowParentRequired = isDependent && !parentHasValue;
+  const isWaitingForParent = isDependent && !parentHasValue;
+
+  const placeholder =
+    isWaitingForParent
+      ? 'Select the parent field first'
+      : isLoading
+        ? 'Loading options...'
+        : options.length === 0 && field.isDynamic
+          ? 'No options available'
+          : field.placeholder || 'Select an option...';
 
   // Find the selected option's nested form (if any)
   const selectedOptionConfig = field.optionConfigs?.find(
@@ -82,26 +84,11 @@ export function SelectField({
       errorMessage={errorMessage}
       className={className}
       labelExtra={
-        <>
-          {field.isDynamic && isLoading && (
-            <Loader2 className='w-3 h-3 animate-spin text-primary' />
-          )}
-          {shouldShowParentRequired && (
-            <span className='text-xs text-amber-600 font-medium'>
-              (Select parent first)
-            </span>
-          )}
-        </>
+        field.isDynamic &&
+        isLoading && <Loader2 className='w-3 h-3 animate-spin text-primary' />
       }>
-      {/* Error state */}
       {loadError ? (
         <FieldError message={loadError} onRetry={onRetry} />
-      ) : shouldShowParentRequired ? (
-        <ParentFieldRequired parentFieldName={parentFieldName} />
-      ) : isLoading ? (
-        <FieldLoading />
-      ) : options.length === 0 && field.isDynamic ? (
-        <FieldEmpty />
       ) : (
         <div className='space-y-3'>
           <Select
@@ -110,7 +97,12 @@ export function SelectField({
               onChange(val);
               onBlur?.();
             }}
-            disabled={disabled || isLoading || options.length === 0}>
+            disabled={
+              disabled ||
+              isLoading ||
+              isWaitingForParent ||
+              (options.length === 0 && field.isDynamic)
+            }>
             <SelectTrigger
               id={field.id}
               className={cn(
@@ -118,15 +110,7 @@ export function SelectField({
                 'hover:border-muted-foreground/50',
                 showError && 'border-red-500 focus:ring-red-500',
               )}>
-              <SelectValue
-                placeholder={
-                  isLoading
-                    ? 'Loading options...'
-                    : options.length === 0
-                      ? 'No options available'
-                      : field.placeholder || 'Select an option...'
-                }
-              />
+              <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
               {options.map((option) => (
@@ -141,15 +125,15 @@ export function SelectField({
           </Select>
 
           {showNestedForm && renderField && (
-              <div className='ml-4 pl-4 border-l-2 border-primary/30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300'>
-                <div className='text-sm font-medium text-muted-foreground'>
-                  {nestedForm!.name || 'Additional Information'}
-                </div>
-                {nestedForm!.fields.map((nestedField) => (
-                  <div key={nestedField.id}>{renderField(nestedField)}</div>
-                ))}
+            <div className='ml-4 pl-4 border-l-2 border-primary/30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300'>
+              <div className='text-sm font-medium text-muted-foreground'>
+                {nestedForm!.name || 'Additional Information'}
               </div>
-            )}
+              {nestedForm!.fields.map((nestedField) => (
+                <div key={nestedField.id}>{renderField(nestedField)}</div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </FieldWrapper>

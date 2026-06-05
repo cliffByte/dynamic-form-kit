@@ -280,7 +280,7 @@ export function FormRenderer({
         ? parentValue !== '' && parentValue !== null && parentValue !== undefined
         : true;
       const parentFieldName = dependsOn
-        ? fields.find((f) => f.id === dependsOn)?.label ?? dependsOn
+        ? fields.find((f) => f.id === dependsOn)?.label
         : undefined;
 
       return (
