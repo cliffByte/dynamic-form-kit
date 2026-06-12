@@ -8,7 +8,7 @@ export interface DisplayFieldProps {
   /** Custom class name */
   className?: string;
   /** Dynamic options loaded from API (for select fields) */
-  dynamicOptions?: { label: string; value: string }[];
+  dynamicOptions?: { label: string | Record<string, string>; value: string }[];
   /** Whether the field should be rendered in a dense/compact mode */
   compact?: boolean;
   /** Whether options are loading */

@@ -82,4 +82,24 @@ describe('dynamicFieldUtils', () => {
       { value: 'a', label: 'Alpha' },
     ]);
   });
+
+  it('maps localized labels when labelFieldTranslations are configured', () => {
+    const ds = {
+      url: '/api/items',
+      path: 'data',
+      valueField: 'id',
+      labelField: 'value.en',
+      labelFieldTranslations: { ne: 'value.ne' },
+    };
+    const payload = {
+      data: [
+        { id: '1', value: { en: 'One', ne: 'एक' } },
+        { id: '2', value: { en: 'Two', ne: 'दुई' } },
+      ],
+    };
+    expect(mapResponseToDynamicOptions(payload, ds)).toEqual([
+      { value: '1', label: { en: 'One', ne: 'एक' } },
+      { value: '2', label: { en: 'Two', ne: 'दुई' } },
+    ]);
+  });
 });

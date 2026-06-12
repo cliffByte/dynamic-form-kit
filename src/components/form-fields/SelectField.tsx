@@ -13,7 +13,9 @@ import {
 import { FieldWrapper, FieldError } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { getDynamicOptionLabel } from '../../lib/dynamicFieldUtils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
+import { useFormKit } from '../../context/FormKitContext';
 
 /**
  * Select dropdown field with support for static and dynamic options, including nested forms
@@ -36,6 +38,8 @@ export function SelectField({
   renderField,
   formValues = {},
 }: DynamicFieldProps) {
+  const { locale } = useFormKit();
+
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
@@ -118,7 +122,7 @@ export function SelectField({
                   key={option.value}
                   value={option.value}
                   className='cursor-pointer'>
-                  {option.label}
+                  {getDynamicOptionLabel(option, locale)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -14,7 +14,9 @@ import {
 } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { getDynamicOptionLabel } from '../../lib/dynamicFieldUtils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
+import { useFormKit } from '../../context/FormKitContext';
 
 /**
  * Radio button group field
@@ -39,6 +41,8 @@ export function RadioField({
   renderField,
   formValues = {},
 }: DynamicFieldProps) {
+  const { locale } = useFormKit();
+
   // Get options from field config or dynamic options
   const options: DynamicOption[] = field.isDynamic
     ? dynamicOptions
@@ -123,7 +127,7 @@ export function RadioField({
                       'text-sm font-medium flex-1',
                       isSelected && 'text-primary',
                     )}>
-                    {option.label}
+                    {getDynamicOptionLabel(option, locale)}
                   </span>
                 </label>
               );

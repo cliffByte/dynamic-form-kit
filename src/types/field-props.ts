@@ -27,7 +27,7 @@ export interface BaseFieldProps {
  * Dynamic option structure
  */
 export interface DynamicOption {
-  label: string;
+  label: string | Record<string, string>;
   value: string;
 }
 

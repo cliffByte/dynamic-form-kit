@@ -1,8 +1,55 @@
 import type { DynamicDataSource, FormField } from '../types/form';
 import { getNestedValue } from '../hooks/useDynamicOptions';
 import { buildDynamicDataSourceRequest } from './dynamicDataSourceRequest';
+import { getLocalizedValue } from './utils';
 
-export type DynamicOption = { value: string; label: string };
+export type DynamicOption = { value: string; label: string | Record<string, string> };
+
+function extractLabelAtPath(item: unknown, path?: string): string | undefined {
+  if (!path) return undefined;
+  const value = getNestedValue(item, path);
+  if (value === undefined || value === null) return undefined;
+  return String(value);
+}
+
+function mapItemToOptionLabel(
+  item: unknown,
+  ds: DynamicDataSource,
+): string | Record<string, string> {
+  const enLabel =
+    extractLabelAtPath(item, ds.labelField) ??
+    (ds.labelField ? undefined : String(item));
+
+  const translations = ds.labelFieldTranslations;
+  if (!translations || Object.keys(translations).length === 0) {
+    return enLabel ?? String(item);
+  }
+
+  const localized: Record<string, string> = {};
+  if (enLabel !== undefined) {
+    localized.en = enLabel;
+  }
+
+  for (const [locale, path] of Object.entries(translations)) {
+    const translated = extractLabelAtPath(item, path);
+    if (translated !== undefined) {
+      localized[locale] = translated;
+    }
+  }
+
+  if (Object.keys(localized).length === 0) {
+    return enLabel ?? String(item);
+  }
+
+  return localized;
+}
+
+export function getDynamicOptionLabel(
+  option: DynamicOption,
+  locale: string,
+): string {
+  return getLocalizedValue(option.label, locale, option.value);
+}
 
 export function isDynamicField(field: FormField): boolean {
   return Boolean(field.isDynamic && field.dataSource);
@@ -60,9 +107,7 @@ export function mapResponseToDynamicOptions(
     value: ds.valueField
       ? String(getNestedValue(item, ds.valueField) ?? item)
       : String(item),
-    label: ds.labelField
-      ? String(getNestedValue(item, ds.labelField) ?? item)
-      : String(item),
+    label: mapItemToOptionLabel(item, ds),
   }));
 }
 

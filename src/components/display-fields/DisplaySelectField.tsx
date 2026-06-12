@@ -6,6 +6,7 @@ import { Badge } from '../ui/badge';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { getLocalizedValue } from '../../lib/utils';
+import { getDynamicOptionLabel } from '../../lib/dynamicFieldUtils';
 import { getChoiceFieldValue } from '../../lib/formUtils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
 import { useFormKit } from '../../context/FormKitContext';
@@ -35,11 +36,7 @@ export function DisplaySelectField({
     if (dynamicOptions) {
       const option = dynamicOptions.find((opt) => opt.value === stringVal);
       if (option) {
-        // Handle localized option labels
-        if (option.label && typeof option.label === 'object') {
-          return getLocalizedValue(option.label, currentLocale);
-        }
-        return option.label;
+        return getDynamicOptionLabel(option, currentLocale);
       }
     }
 

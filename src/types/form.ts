@@ -22,7 +22,8 @@ export interface DynamicDataSource {
   method?: 'GET' | 'POST'; // HTTP method (default: GET)
   path: string; // JSONPath to extract data from response (e.g., "data.list", "items")
   valueField: string; // Field name to use as option value (e.g., "id")
-  labelField: string; // Field name to use as option label (e.g., "name")
+  labelField: string; // JSON path for English option label (e.g., "name" or "data.value.en")
+  labelFieldTranslations?: Record<string, string>; // Locale-specific label paths (e.g., { ne: "data.value.ne" })
   headers?: Record<string, string>; // Optional custom headers
   body?: Record<string, any>; // Request body for POST requests
   dependsOn?: string; // Parent field ID for cascading selects

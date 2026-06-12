@@ -13,7 +13,9 @@ import {
 } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { getDynamicOptionLabel } from '../../lib/dynamicFieldUtils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
+import { useFormKit } from '../../context/FormKitContext';
 
 /**
  * Checkbox group field for multiple selections
@@ -38,6 +40,7 @@ export function CheckboxField({
   renderField,
   formValues = {},
 }: DynamicFieldProps) {
+  const { locale } = useFormKit();
   const selectedValues: string[] = sanitizeMultiChoiceFieldValue(field, value);
 
   useEffect(() => {
@@ -142,7 +145,7 @@ export function CheckboxField({
                       'text-sm font-medium flex-1',
                       isChecked && 'text-primary',
                     )}>
-                    {option.label}
+                    {getDynamicOptionLabel(option, locale)}
                   </span>
                 </label>
               );

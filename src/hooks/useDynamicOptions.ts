@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DynamicDataSource } from '../types/form';
 import { buildDynamicDataSourceRequest } from '../lib/dynamicDataSourceRequest';
-import { mapResponseToDynamicOptions } from '../lib/dynamicFieldUtils';
+import {
+  mapResponseToDynamicOptions,
+  type DynamicOption,
+} from '../lib/dynamicFieldUtils';
 
 interface UseDynamicOptionsResult {
-  options: Array<{ value: string; label: string }>;
+  options: DynamicOption[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -20,9 +23,7 @@ export function useDynamicOptions(
   parentValue?: any,
   enabled: boolean = true,
 ): UseDynamicOptionsResult {
-  const [options, setOptions] = useState<
-    Array<{ value: string; label: string }>
-  >([]);
+  const [options, setOptions] = useState<DynamicOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

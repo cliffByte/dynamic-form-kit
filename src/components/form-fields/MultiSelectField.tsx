@@ -14,7 +14,9 @@ import {
 } from './FieldWrapper';
 import { DynamicFieldProps, DynamicOption } from './types';
 import { cn } from '../../lib/utils';
+import { getDynamicOptionLabel } from '../../lib/dynamicFieldUtils';
 import { hasRenderableNestedFormFields } from '../../lib/formStepStructure';
+import { useFormKit } from '../../context/FormKitContext';
 
 /**
  * Multi-select field with card-based selection UI
@@ -39,6 +41,7 @@ export function MultiSelectField({
   renderField,
   formValues = {},
 }: DynamicFieldProps) {
+  const { locale } = useFormKit();
   const selectedValues: string[] = sanitizeMultiChoiceFieldValue(field, value);
 
   useEffect(() => {
@@ -117,14 +120,14 @@ export function MultiSelectField({
                 variant='default'
                 className='flex items-center gap-1 pl-2 pr-1 py-1'>
                 <span className='text-sm'>
-                  {option?.label || selectedValue}
+                  {option ? getDynamicOptionLabel(option, locale) : selectedValue}
                 </span>
                 <button
                   type='button'
                   onClick={() => removeOption(selectedValue)}
                   disabled={disabled}
                   className='ml-1 rounded-full p-0.5 hover:bg-white/20 transition-colors'
-                  aria-label={`Remove ${option?.label || selectedValue}`}>
+                  aria-label={`Remove ${option ? getDynamicOptionLabel(option, locale) : selectedValue}`}>
                   <X className='w-3 h-3' />
                 </button>
               </Badge>
@@ -166,7 +169,7 @@ export function MultiSelectField({
                       'text-sm font-medium',
                       isSelected && 'text-primary',
                     )}>
-                    {option.label}
+                    {getDynamicOptionLabel(option, locale)}
                   </span>
                   {isSelected && (
                     <div className='bg-primary text-primary-foreground rounded-full p-0.5'>

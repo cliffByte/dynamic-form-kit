@@ -558,12 +558,33 @@ export const ChoiceOptionsEditor: React.FC<ChoiceOptionsEditorProps> = ({
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
               <Label className='text-[10px] uppercase text-muted-foreground'>
-                Label Field
+                Label Field (English)
               </Label>
               <Input
                 value={field.dataSource?.labelField || 'name'}
                 onChange={(e) => patchDataSource({ labelField: e.target.value })}
-                placeholder='name'
+                placeholder='name or data.value.en'
+                className='h-8 text-xs'
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label className='text-[10px] uppercase text-muted-foreground'>
+                Label Field (Nepali)
+              </Label>
+              <Input
+                value={field.dataSource?.labelFieldTranslations?.ne || ''}
+                onChange={(e) => {
+                  const ne = e.target.value.trim();
+                  const current = field.dataSource?.labelFieldTranslations || {};
+                  patchDataSource({
+                    labelFieldTranslations: ne
+                      ? { ...current, ne }
+                      : Object.fromEntries(
+                          Object.entries(current).filter(([key]) => key !== 'ne'),
+                        ),
+                  });
+                }}
+                placeholder='data.value.ne'
                 className='h-8 text-xs'
               />
             </div>

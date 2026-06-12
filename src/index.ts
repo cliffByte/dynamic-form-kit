@@ -106,6 +106,12 @@ export {
 } from './lib/formStepStructure';
 
 export { useDynamicOptions, getNestedValue } from './hooks/useDynamicOptions';
+export {
+  mapResponseToDynamicOptions,
+  getDynamicOptionLabel,
+  fetchDynamicOptionsForField,
+  type DynamicOption,
+} from './lib/dynamicFieldUtils';
 export { useLocalizedField, useLocalizedFields } from './hooks/useLocalizedField';
 export {
   FORM_KIT_DEFAULT_LOCALE,

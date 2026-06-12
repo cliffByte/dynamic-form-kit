@@ -6,9 +6,8 @@ import {
   getDynamicFieldFetchKey,
   getDynamicParentFieldId,
   isDynamicField,
+  type DynamicOption,
 } from '../lib/dynamicFieldUtils';
-
-type DynamicOption = { value: string; label: string };
 
 export function useDynamicFormOptions(
   visibleFields: FormField[],

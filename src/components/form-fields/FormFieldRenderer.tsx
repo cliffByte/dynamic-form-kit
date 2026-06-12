@@ -50,7 +50,7 @@ export interface FormFieldRendererProps {
 
   // Dynamic options props
   /** Dynamic options loaded from API */
-  dynamicOptions?: { label: string; value: string }[];
+  dynamicOptions?: { label: string | Record<string, string>; value: string }[];
   /** Whether options are loading */
   isLoading?: boolean;
   /** Error message when loading options fails */
