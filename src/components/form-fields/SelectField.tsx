@@ -98,6 +98,12 @@ export function SelectField({
           <Select
             value={sanitizedValue}
             onValueChange={(val) => {
+              // Radix's hidden form-integration <select> re-syncs with '' when
+              // the controlled value changes while the dropdown is closed (its
+              // native options are only registered while open). Radix forbids
+              // SelectItem value='', so '' can never be a real user selection —
+              // ignore it instead of wiping state (e.g. after a locale remap).
+              if (val === '') return;
               onChange(val);
               onBlur?.();
             }}

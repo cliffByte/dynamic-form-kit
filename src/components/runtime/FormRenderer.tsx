@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { FormField } from '../../types/form';
 import { createEnhancedSubmission, shouldShowField } from '../../lib/formUtils';
 import { cleanSubmissionData } from '../../lib/formUtils';
@@ -19,6 +25,7 @@ import {
   mapDefaultValuesToFieldIds,
 } from '../../lib/submissionUtils';
 import { uploadPendingMediaInValues } from '../../lib/mediaUploadUtils';
+import { remapSimpleOptionValuesForLocale } from '../../lib/localeValueRemap';
 import {
   applyFieldVisibility,
   groupStepSections,
@@ -121,15 +128,26 @@ export function FormRenderer({
     [localizedFields, hide],
   );
 
+  // Locale-independent counterpart of `fields`: initial values must not be
+  // re-derived (and state reset) when a locale change re-translates fields.
+  const rawInitialFields = useMemo(
+    () => applyFieldVisibility(rawFields, hide),
+    [rawFields, hide],
+  );
+
   const derivedInitialValues = useMemo((): Values => {
     if (submission != null) {
       const extracted = extractSubmissionValues(submission) as Values;
-      return expandNestedOptionSubmission(fields, extracted);
+      return expandNestedOptionSubmission(rawInitialFields, extracted);
     }
-    const base = createEnhancedSubmission(fields).submissionData as Values;
-    const mappedDefaults = mapDefaultValuesToFieldIds(fields, defaultValues);
+    const base = createEnhancedSubmission(rawInitialFields)
+      .submissionData as Values;
+    const mappedDefaults = mapDefaultValuesToFieldIds(
+      rawInitialFields,
+      defaultValues,
+    );
     return { ...base, ...mappedDefaults };
-  }, [submission, fields, defaultValues]);
+  }, [submission, rawInitialFields, defaultValues]);
 
   const [values, setValues] = useState<Values>(derivedInitialValues);
   const valuesRef = useRef<Values>(derivedInitialValues);
@@ -143,6 +161,17 @@ export function FormRenderer({
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   const formStructure = useMemo(() => groupStepSections(fields), [fields]);
+  // Stable key describing the wizard STRUCTURE (step ids only). Localizing
+  // labels produces a new `formStructure` identity but the same key, so a
+  // locale change must not reset the wizard position.
+  const stepStructureKey = useMemo(() => {
+    if (!formStructure.hasSteps || formStructure.stepGroups.length === 0) {
+      return 'none';
+    }
+    return formStructure.stepGroups
+      .map((group) => group.steps.map((step) => step.id).join(','))
+      .join('|');
+  }, [formStructure]);
   const useWizard = enableMultiStep && isMultiStepWizard(formStructure, activeStepGroup);
 
   const isLastStep = useMemo(() => {
@@ -160,19 +189,68 @@ export function FormRenderer({
     setCompletedSteps(new Set());
   }, [derivedInitialValues]);
 
+  // Keep the latest structure readable from the key-based reset effect below
+  // without making `formStructure` itself a dependency (its identity changes
+  // on every locale switch). Declared before that effect so the ref is fresh.
+  const formStructureRef = useRef(formStructure);
   useEffect(() => {
-    if (formStructure.hasSteps && formStructure.stepGroups.length > 0) {
-      setActiveStepGroup(formStructure.stepGroups[0]);
+    formStructureRef.current = formStructure;
+  });
+
+  // Reset the wizard position only when the step STRUCTURE changes.
+  useEffect(() => {
+    const structure = formStructureRef.current;
+    if (structure.hasSteps && structure.stepGroups.length > 0) {
+      setActiveStepGroup(structure.stepGroups[0]);
       setCurrentStepIndex(0);
       setCompletedSteps(new Set());
     } else {
       setActiveStepGroup(null);
     }
+  }, [stepStructureKey]);
+
+  // On locale changes the structure key is unchanged but step labels are
+  // re-translated: refresh the active group in place WITHOUT resetting the
+  // step index or completed steps.
+  useEffect(() => {
+    setActiveStepGroup((prev) => {
+      if (!prev) return prev;
+      if (!formStructure.hasSteps || formStructure.stepGroups.length === 0) {
+        return prev;
+      }
+      const match = formStructure.stepGroups.find(
+        (group) =>
+          group.steps.length === prev.steps.length &&
+          group.steps.every((step, i) => step.id === prev.steps[i].id),
+      );
+      return match ?? prev;
+    });
   }, [formStructure]);
 
   useEffect(() => {
     valuesRef.current = values;
   }, [values]);
+
+  // Simple-options choice fields store the localized label as the value, so a
+  // locale switch would orphan (and sanitize away) the stored selection. Remap
+  // values by option index onto the new locale. This must happen during render
+  // (React's "adjusting state during render" pattern): an effect would run too
+  // late — the choice fields would already have rendered with the mismatched
+  // value and their sanitize effects would clear it.
+  const [prevLocale, setPrevLocale] = useState(locale);
+  if (prevLocale !== locale) {
+    setPrevLocale(locale);
+    const remapped = remapSimpleOptionValuesForLocale(
+      rawFields,
+      values,
+      prevLocale,
+      locale,
+    );
+    if (remapped !== values) {
+      setValues(remapped);
+      valuesRef.current = remapped;
+    }
+  }
 
   const visibleFields = useMemo(
     () => collectVisibleFields(fields, values),

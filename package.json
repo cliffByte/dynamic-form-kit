@@ -1,6 +1,6 @@
 {
   "name": "@dynamic-core/form-kit",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "Dynamic form builder, field renderers, and display components (Tailwind v4). Publish from this folder after bumping version (npm publish; scope access in publishConfig).",
   "license": "ISC",
   "author": {
@@ -133,12 +133,17 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/leaflet": "^1.9.21",
     "@types/lodash": "^4.17.23",
     "@types/node": "^20.8.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/uuid": "^9.0.6",
+    "jsdom": "^29.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwindcss": "^4",
