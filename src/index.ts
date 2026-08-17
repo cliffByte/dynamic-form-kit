@@ -91,6 +91,7 @@ export {
   isMultiStepWizard,
   markFieldsTouched,
   scrollToFirstFieldError,
+  getFieldErrorMessage,
   findStepIndexForFieldId,
   collectVisibleFields,
   hasRenderableNestedFormFields,

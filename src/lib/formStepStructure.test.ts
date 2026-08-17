@@ -3,8 +3,10 @@ import type { FormField } from '../types/form';
 import {
   applyFieldVisibility,
   collectVisibleFields,
+  getFieldErrorMessage,
   groupStepSections,
   hasRenderableNestedFormFields,
+  mergeStepValidationErrors,
   validateVisibleFields,
 } from './formStepStructure';
 
@@ -180,5 +182,48 @@ describe('hasRenderableNestedFormFields', () => {
       makeTextField('visible_child'),
     ];
     expect(hasRenderableNestedFormFields(fields, {})).toBe(true);
+  });
+});
+
+describe('getFieldErrorMessage', () => {
+  it('returns the exact error for a field id', () => {
+    const errors = { name: 'Name is required' };
+    expect(getFieldErrorMessage(errors, 'name')).toBe('Name is required');
+  });
+
+  it('returns the first nested error for a container field', () => {
+    const errors = {
+      'table1.0.col_a': 'Column A is required',
+      'table1.1.col_b': 'Column B is required',
+    };
+    expect(getFieldErrorMessage(errors, 'table1')).toBe(
+      'Column A is required',
+    );
+  });
+
+  it('does not match ids that only share a prefix', () => {
+    const errors = { 'table1_extra.0.col_a': 'error' };
+    expect(getFieldErrorMessage(errors, 'table1')).toBeUndefined();
+  });
+});
+
+describe('mergeStepValidationErrors', () => {
+  it('clears nested path errors rooted at step fields', () => {
+    const prev = {
+      'other_field': 'keep me',
+      'table1.0.col_a': 'Column A is required',
+      'table1.1.col_b': 'Column B is required',
+    };
+    const result = mergeStepValidationErrors(prev, ['table1'], {});
+    expect(result).toEqual({ other_field: 'keep me' });
+  });
+
+  it('preserves nested errors belonging to other steps', () => {
+    const prev = {
+      'table_other.0.col_a': 'keep me',
+      'table1.0.col_a': 'clear me',
+    };
+    const result = mergeStepValidationErrors(prev, ['table1'], {});
+    expect(result).toEqual({ 'table_other.0.col_a': 'keep me' });
   });
 });

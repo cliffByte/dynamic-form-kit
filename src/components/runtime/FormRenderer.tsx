@@ -28,6 +28,7 @@ import { uploadPendingMediaInValues } from '../../lib/mediaUploadUtils';
 import { remapSimpleOptionValuesForLocale } from '../../lib/localeValueRemap';
 import {
   applyFieldVisibility,
+  getFieldErrorMessage,
   groupStepSections,
   isMultiStepWizard,
   markFieldsTouched,
@@ -360,6 +361,9 @@ export function FormRenderer({
       const parentFieldName = dependsOn
         ? fields.find((f) => f.id === dependsOn)?.label
         : undefined;
+      // Includes errors from nested value paths (e.g. `tableId.0.columnId`)
+      // so container fields like tables surface their first cell error.
+      const errorMessage = getFieldErrorMessage(validationErrors, field.id);
 
       return (
         <div id={`field-${field.id}`}>
@@ -376,15 +380,22 @@ export function FormRenderer({
               });
               setTouched((prev) => ({ ...prev, [field.id]: true }));
               setValidationErrors((prev) => {
-                if (!prev[field.id]) return prev;
-                const next = { ...prev };
-                delete next[field.id];
+                const prefix = `${field.id}.`;
+                const hasRelatedError =
+                  Boolean(prev[field.id]) ||
+                  Object.keys(prev).some((key) => key.startsWith(prefix));
+                if (!hasRelatedError) return prev;
+                const next: Record<string, string> = {};
+                for (const [key, message] of Object.entries(prev)) {
+                  if (key === field.id || key.startsWith(prefix)) continue;
+                  next[key] = message;
+                }
                 return next;
               });
             }}
             onBlur={() => setTouched((prev) => ({ ...prev, [field.id]: true }))}
-            showError={Boolean(touched[field.id]) && Boolean(validationErrors[field.id])}
-            errorMessage={validationErrors[field.id]}
+            showError={Boolean(touched[field.id]) && Boolean(errorMessage)}
+            errorMessage={errorMessage}
             disabled={disabled || saving || parentDisabled}
             dynamicOptions={dynamicOptions[field.id] ?? []}
             isLoading={Boolean(loadingFields[field.id])}
@@ -619,22 +630,24 @@ export function FormRenderer({
       ) : (
         <>
           {renderSinglePageFields()}
-          <div className='flex flex-col sm:flex-row items-center gap-3 pt-4 border-t'>
-            {showReset && (
-              <Button
-                type='button'
-                variant='outline'
-                onClick={resetForm}
-                disabled={disabled || saving}>
-                {stepLabels?.reset ?? 'Reset'}
-              </Button>
-            )}
-            <Button type='submit' disabled={disabled || saving} className='sm:ml-auto'>
+          <div className='flex flex-row items-center justify-between gap-3 pt-4 border-t'>
+            <div className='flex gap-3 items-center'>
+              {showReset && (
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={resetForm}
+                  disabled={disabled || saving}>
+                  {stepLabels?.reset ?? 'Reset'}
+                </Button>
+              )}
+              {submitError && (
+                <span className='text-sm text-destructive'>{submitError}</span>
+              )}
+            </div>
+            <Button type='submit' disabled={disabled || saving}>
               {saving ? savingLabel : submitLabel}
             </Button>
-            {submitError && (
-              <span className='text-sm text-destructive'>{submitError}</span>
-            )}
           </div>
         </>
       )}

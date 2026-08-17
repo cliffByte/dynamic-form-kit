@@ -152,11 +152,36 @@ export function markFieldsTouched(fieldList: FormField[]): Record<string, boolea
   return touched;
 }
 
+/**
+ * Error message for a field, including errors from nested value paths
+ * (e.g. table cells keyed as `tableId.rowIndex.columnId`).
+ */
+export function getFieldErrorMessage(
+  errors: Record<string, string>,
+  fieldId: string,
+): string | undefined {
+  if (errors[fieldId]) return errors[fieldId];
+  const prefix = `${fieldId}.`;
+  const nestedKey = Object.keys(errors).find((key) => key.startsWith(prefix));
+  return nestedKey ? errors[nestedKey] : undefined;
+}
+
 export function scrollToFirstFieldError(errors: Record<string, string>): void {
   const firstErrorFieldId = Object.keys(errors)[0];
   if (!firstErrorFieldId) return;
-  const errorElement = document.getElementById(`field-${firstErrorFieldId}`);
-  errorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Nested error paths (e.g. `tableId.0.columnId`) resolve to the closest
+  // rendered ancestor element (`field-tableId`).
+  const segments = firstErrorFieldId.split('.');
+  for (let i = segments.length; i > 0; i--) {
+    const errorElement = document.getElementById(
+      `field-${segments.slice(0, i).join('.')}`,
+    );
+    if (errorElement) {
+      errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+  }
 }
 
 export function findStepIndexForFieldId(
@@ -364,9 +389,16 @@ export function mergeStepValidationErrors(
   stepFieldIds: string[],
   stepErrors: Record<string, string>,
 ): Record<string, string> {
-  const next = { ...prev };
-  for (const id of stepFieldIds) {
-    delete next[id];
+  const stepIdSet = new Set(stepFieldIds);
+  const next: Record<string, string> = {};
+
+  for (const [key, message] of Object.entries(prev)) {
+    // Clear both exact matches and nested paths rooted at a step field
+    // (e.g. `tableId.0.columnId` for `tableId`).
+    const rootId = key.split('.')[0];
+    if (stepIdSet.has(key) || stepIdSet.has(rootId)) continue;
+    next[key] = message;
   }
+
   return { ...next, ...stepErrors };
 }

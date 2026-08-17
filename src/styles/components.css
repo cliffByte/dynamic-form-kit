@@ -70,3 +70,20 @@
     opacity: 0.6;
   }
 }
+
+/* Hide scrollbars while keeping scroll behavior (Chrome/Safari/Edge + Firefox). */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Center the step track when it fits; fall back to start alignment so
+   overflowing steps remain fully reachable when scrolling. */
+@media (min-width: 48rem) {
+  .form-kit-steps-center-safe {
+    justify-content: safe center;
+  }
+}

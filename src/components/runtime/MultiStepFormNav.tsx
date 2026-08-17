@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { FormField } from '../../types/form';
 import type { StepGroup } from '../../lib/formStepStructure';
 import { cn, formatNumberByLocale } from '../../lib/utils';
@@ -30,9 +30,16 @@ export function MultiStepProgress({
   onGoToStep,
   className,
 }: MultiStepProgressProps): React.ReactElement {
+  const stepRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  useEffect(() => {
+    const el = stepRefs.current[currentStepIndex];
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [currentStepIndex, steps]);
+
   return (
     <div className={cn('mb-4', className)}>
-      <div className='flex items-center justify-center mb-4 flex-wrap gap-y-4'>
+      <div className='flex items-center justify-start mb-4 overflow-x-auto scrollbar-none form-kit-steps-center-safe'>
         {steps.map((step, index) => {
           const isCompleted = completedSteps.has(index);
           const isCurrent = index === currentStepIndex;
@@ -40,14 +47,19 @@ export function MultiStepProgress({
             index <= currentStepIndex || completedSteps.has(index - 1);
 
           return (
-            <div key={step.id} className='flex items-center'>
+            <div
+              key={step.id}
+              ref={(el) => {
+                stepRefs.current[index] = el;
+              }}
+              className='flex items-center shrink-0'>
               <div className='flex flex-col items-center'>
                 <button
                   type='button'
                   onClick={() => isClickable && onGoToStep(index)}
                   disabled={!isClickable}
                   className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center transition-all font-semibold text-sm',
+                    'w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all font-semibold text-sm',
                     isCompleted &&
                       'bg-green-500 text-white cursor-pointer hover:bg-green-600',
                     isCurrent &&
@@ -79,7 +91,7 @@ export function MultiStepProgress({
               {index < steps.length - 1 && (
                 <div
                   className={cn(
-                    'w-12 h-1 mx-2 rounded transition-all',
+                    'w-12 h-1 mx-2 rounded transition-all shrink-0',
                     completedSteps.has(index) ? 'bg-green-500' : 'bg-muted',
                   )}
                 />
@@ -130,7 +142,7 @@ export function MultiStepFormNav({
   return (
     <div
       className={cn(
-        'mt-8 pt-4 border-t flex flex-col sm:flex-row justify-between gap-3',
+        'mt-8 pt-4 border-t flex flex-row justify-between gap-3',
         className,
       )}>
       <div className='flex gap-2'>

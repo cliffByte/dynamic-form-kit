@@ -419,13 +419,14 @@ export function TableField({
             isDefaultLockedCell={isDefaultLockedCell}
             hasChildren={hasChildren}
             showRowLabelColumn={showRowLabelColumn}
+            showError={showError}
             addColumn={addColumn}
             removeColumn={removeColumn}
             updateCellByRow={updateCellByRow}
           />
         ) : (
         <>
-        <div className='border rounded-lg overflow-hidden'>
+        <div className={cn('border rounded-lg overflow-hidden', showError && 'border-red-500')}>
           <div className='overflow-x-auto'>
             <table className='w-full'>
               <thead className='bg-muted/50'>
@@ -651,6 +652,7 @@ interface TransposedTableProps {
   canAddMore: boolean;
   canRemove: boolean;
   showRowLabelColumn: boolean;
+  showError?: boolean;
   getColumnDefForRow: (rowIndex: number) => TableColumn | FormField;
   isDefaultLockedCell: (rowIndex: number, columnId: string) => boolean;
   hasChildren: (rowId: string) => boolean;
@@ -673,6 +675,7 @@ function TransposedTable({
   canAddMore,
   canRemove,
   showRowLabelColumn,
+  showError,
   getColumnDefForRow,
   isDefaultLockedCell,
   hasChildren,
@@ -701,7 +704,7 @@ function TransposedTable({
 
   return (
     <>
-      <div className='border rounded-lg overflow-hidden'>
+      <div className={cn('border rounded-lg overflow-hidden', showError && 'border-red-500')}>
         <div className='overflow-x-auto'>
           <table className='w-full'>
             <thead className='bg-muted/50'>
