@@ -353,7 +353,7 @@ function DropZone({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       className={cn(
-        'relative w-full min-w-0 max-w-full border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200',
+        'relative w-full min-w-0 max-w-full flex items-center gap-2.5 border-2 border-dashed rounded-lg px-3 py-2.5 text-left transition-all duration-200',
         dragActive && 'border-primary bg-primary/5',
         !dragActive &&
           'border-muted-foreground/30 hover:border-muted-foreground/50',
@@ -369,33 +369,32 @@ function DropZone({
         disabled={disabled || uploading}
         className='absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed'
       />
-      <div className='flex flex-col items-center gap-2'>
-        {uploading ? (
-          <Loader2 className='w-10 h-10 text-primary animate-spin' />
-        ) : (
-          <Upload
-            className={cn(
-              'w-10 h-10 transition-colors',
-              dragActive ? 'text-primary' : 'text-muted-foreground',
-            )}
-          />
-        )}
-        <div>
-          <p className='font-medium text-sm'>
-            {dragActive
+      {uploading ? (
+        <Loader2 className='w-5 h-5 shrink-0 text-primary animate-spin' />
+      ) : (
+        <Upload
+          className={cn(
+            'w-5 h-5 shrink-0 transition-colors',
+            dragActive ? 'text-primary' : 'text-muted-foreground',
+          )}
+        />
+      )}
+      <div className='min-w-0 flex-1'>
+        <p className='text-sm font-medium truncate'>
+          {uploading
+            ? 'Uploading…'
+            : dragActive
               ? 'Drop files here'
-              : 'Drag & drop files or click to browse'}
-          </p>
-          <p className='text-xs text-muted-foreground mt-1'>
-            Max size: {formatMediaFileSize(maxSize)} per file
-            {multiple &&
-              ` • Up to ${maxFiles} file${maxFiles === 1 ? '' : 's'}`}
-            {multiple &&
-              maxTotalSize !== undefined &&
-              ` • ${formatMediaFileSize(maxTotalSize)} total`}
-            {deferMediaUpload && ' • Uploads when you submit the form'}
-          </p>
-        </div>
+              : 'Click to upload'}
+        </p>
+        <p className='text-xs text-muted-foreground mt-0.5 truncate'>
+          {formatMediaFileSize(maxSize)} per file
+          {multiple && ` • ${maxFiles} max`}
+          {multiple &&
+            maxTotalSize !== undefined &&
+            ` • ${formatMediaFileSize(maxTotalSize)} total`}
+          {deferMediaUpload && ' • uploads on submit'}
+        </p>
       </div>
     </div>
   );

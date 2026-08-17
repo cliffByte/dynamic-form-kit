@@ -380,6 +380,13 @@ export function TableField({
     }, 0);
   };
 
+  const shouldShowColSum = (col: TableColumn | FormField): boolean => {
+    const showSum = 'showSum' in col ? col.showSum : undefined;
+    return showSum !== undefined
+      ? showSum
+      : col.type === 'number' || col.type === 'calculated';
+  };
+
   return (
     <FieldWrapper
       fieldId={field.id}
@@ -426,7 +433,12 @@ export function TableField({
           />
         ) : (
         <>
-        <div className={cn('border rounded-lg overflow-hidden', showError && 'border-red-500')}>
+        {/* Desktop: table view */}
+        <div
+          className={cn(
+            'hidden md:block border rounded-lg overflow-hidden',
+            showError && 'border-red-500',
+          )}>
           <div className='overflow-x-auto'>
             <table className='w-full'>
               <thead className='bg-muted/50'>
@@ -595,18 +607,11 @@ export function TableField({
                     {showRowLabelColumn && <td className='p-2 border-r'></td>}
                     {columns.map((col) => {
                       // Show sum if explicitly set to true, or by default for number/calculated columns
-                      const showSum =
-                        'showSum' in col ? col.showSum : undefined;
-                      const shouldShowSum =
-                        showSum !== undefined
-                          ? showSum
-                          : col.type === 'number' || col.type === 'calculated';
-
                       return (
                         <td
                           key={col.id}
                           className='p-2 border-l text-sm font-bold'>
-                          {shouldShowSum
+                          {shouldShowColSum(col)
                             ? calculateTotal(col.id).toLocaleString()
                             : ''}
                         </td>
@@ -618,6 +623,102 @@ export function TableField({
               )}
             </table>
           </div>
+        </div>
+
+        {/* Mobile: card view (one card per row) */}
+        <div className='md:hidden space-y-3'>
+          {rows.length === 0 ? (
+            <div className='border rounded-lg p-6 text-center text-muted-foreground'>
+              <p className='text-sm'>No rows added yet</p>
+              {minRows > 0 && (
+                <p className='text-xs mt-1'>
+                  Minimum {minRows} row{minRows > 1 ? 's' : ''} required
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              {rows.map((row, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className={cn(
+                    'border rounded-lg overflow-hidden',
+                    showError && 'border-red-500',
+                  )}>
+                  <div className='flex items-center justify-between bg-muted/50 px-3 py-2 border-b'>
+                    <span className='text-sm font-medium text-muted-foreground'>
+                      {(showRowLabelColumn &&
+                        (rowDefinitions[rowIndex]?.name ||
+                          rowDefinitions[rowIndex]?.label)) ||
+                        `Row ${rowIndex + 1}`}
+                    </span>
+                    {!hasFixedRows && (
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        onClick={() => removeRow(rowIndex)}
+                        disabled={disabled || !canRemove}
+                        className={cn(
+                          'h-7 w-7',
+                          canRemove &&
+                            'text-muted-foreground hover:text-red-600 hover:bg-red-50',
+                        )}>
+                        <Trash2 className='w-3 h-3' />
+                      </Button>
+                    )}
+                  </div>
+                  <div className='divide-y'>
+                    {columns.map((col) => (
+                      <div
+                        key={col.id}
+                        className='flex items-center gap-3 px-3 py-2'>
+                        <span className='w-2/5 shrink-0 text-xs font-medium text-muted-foreground'>
+                          {col.label}
+                          {col.required && (
+                            <span className='text-red-500 ml-1'>*</span>
+                          )}
+                        </span>
+                        <div className='flex-1 min-w-0'>
+                          {renderCell(
+                            col,
+                            row[col.id],
+                            (val) => updateCell(rowIndex, col.id, val),
+                            disabled ||
+                              isDefaultLockedCell(rowIndex, col.id) ||
+                              (showRowLabelColumn &&
+                                col.type === 'number' &&
+                                hasChildren(
+                                  rowDefinitions[rowIndex]?.id || '',
+                                )),
+                            'h-9 text-sm',
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {field.showTableFooter !== false &&
+                columns.some((col) => shouldShowColSum(col)) && (
+                  <div className='border rounded-lg bg-muted/30 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1'>
+                    {columns
+                      .filter((col) => shouldShowColSum(col))
+                      .map((col) => (
+                        <span key={col.id} className='text-sm'>
+                          <span className='text-muted-foreground'>
+                            {col.label}:{' '}
+                          </span>
+                          <span className='font-bold'>
+                            {calculateTotal(col.id).toLocaleString()}
+                          </span>
+                        </span>
+                      ))}
+                  </div>
+                )}
+            </>
+          )}
         </div>
 
         {/* Add row button */}
@@ -704,7 +805,12 @@ function TransposedTable({
 
   return (
     <>
-      <div className={cn('border rounded-lg overflow-hidden', showError && 'border-red-500')}>
+      {/* Desktop: table view */}
+      <div
+        className={cn(
+          'hidden md:block border rounded-lg overflow-hidden',
+          showError && 'border-red-500',
+        )}>
         <div className='overflow-x-auto'>
           <table className='w-full'>
             <thead className='bg-muted/50'>
@@ -810,6 +916,101 @@ function TransposedTable({
         </div>
       </div>
 
+      {/* Mobile: card view (one card per entry) */}
+      <div className='md:hidden space-y-3'>
+        {rows.length === 0 ? (
+          <div className='border rounded-lg p-6 text-center text-muted-foreground'>
+            <p className='text-sm'>No columns added yet</p>
+          </div>
+        ) : (
+          <>
+            {rows.map((instance, instanceIndex) => (
+              <div
+                key={instanceIndex}
+                className={cn(
+                  'border rounded-lg overflow-hidden',
+                  showError && 'border-red-500',
+                )}>
+                <div className='flex items-center justify-between bg-muted/50 px-3 py-2 border-b'>
+                  <span className='text-sm font-medium text-muted-foreground'>
+                    Entry {instanceIndex + 1}
+                  </span>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    onClick={() => removeColumn(instanceIndex)}
+                    disabled={disabled || !canRemove}
+                    className={cn(
+                      'h-7 w-7',
+                      canRemove &&
+                        'text-muted-foreground hover:text-red-600 hover:bg-red-50',
+                    )}>
+                    <Trash2 className='w-3 h-3' />
+                  </Button>
+                </div>
+                <div className='divide-y'>
+                  {defs.map((rowDef, rowDefIndex) => {
+                    const col = getColumnDefForRow(rowDefIndex);
+                    return (
+                      <div
+                        key={rowDef.id}
+                        className='flex items-center gap-3 px-3 py-2'>
+                        <span className='w-2/5 shrink-0 text-xs font-medium text-muted-foreground'>
+                          {rowDef.name || rowDef.label || rowDefIndex + 1}
+                          {col.required && (
+                            <span className='text-red-500 ml-1'>*</span>
+                          )}
+                        </span>
+                        <div className='flex-1 min-w-0'>
+                          {renderCell(
+                            col,
+                            instance[rowDef.id],
+                            (val) =>
+                              updateCellByRow(
+                                instanceIndex,
+                                rowDefIndex,
+                                rowDef.id,
+                                val,
+                              ),
+                            disabled ||
+                              isDefaultLockedCell(rowDefIndex, col.id) ||
+                              (showRowLabelColumn &&
+                                col.type === 'number' &&
+                                hasChildren(rowDef.id)),
+                            'h-9 text-sm',
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {field.showTableFooter !== false &&
+              defs.some((_, rowDefIndex) => calculateRowDefTotal(rowDefIndex) !== null) && (
+                <div className='border rounded-lg bg-muted/30 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1'>
+                  {defs.map((rowDef, rowDefIndex) => {
+                    const total = calculateRowDefTotal(rowDefIndex);
+                    if (total === null) return null;
+                    return (
+                      <span key={rowDef.id} className='text-sm'>
+                        <span className='text-muted-foreground'>
+                          {rowDef.name || rowDef.label || rowDefIndex + 1}:{' '}
+                        </span>
+                        <span className='font-bold'>
+                          {total.toLocaleString()}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+          </>
+        )}
+      </div>
+
       <div className='flex gap-2'>
         <Button
           type='button'
@@ -835,9 +1036,11 @@ function renderCell(
   value: any,
   onChange: (value: any) => void,
   disabled?: boolean,
+  inputClassName?: string,
 ) {
   const colType = column.type;
   const placeholder = 'placeholder' in column ? column.placeholder : undefined;
+  const cellInputClass = inputClassName ?? 'h-8 text-sm border-none rounded-none';
 
   const commonProps = {
     value: value ?? '',
@@ -850,7 +1053,7 @@ function renderCell(
           : e.target.value,
       ),
     disabled,
-    className: 'h-8 text-sm border-none rounded-none',
+    className: cellInputClass,
     placeholder,
   };
 
@@ -872,7 +1075,10 @@ function renderCell(
       return (
         <select
           {...commonProps}
-          className='w-full h-8 text-sm border rounded px-2 bg-background'>
+          className={cn(
+            'w-full border rounded px-2 bg-background',
+            inputClassName ?? 'h-8 text-sm',
+          )}>
           <option value=''>Select...</option>
           {(options || []).map((opt) => (
             <option
@@ -929,7 +1135,7 @@ function renderCell(
             onChange(transliterateRomanizedNepali(e.target.value))
           }
           disabled={disabled}
-          className='h-8 text-sm border-none rounded-none'
+          className={cn('w-full', cellInputClass)}
           placeholder={placeholder || 'Type in Romanized Nepali...'}
         />
       );
